@@ -3,16 +3,19 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api, ErroApi } from "../api";
 import { useApp } from "../App";
 import { Cabecalho } from "../componentes/Layout";
+import { CriarLink } from "../componentes/CriarLink";
 import { ConfirmarLixeira, EdicaoEmLote } from "../componentes/EdicaoEmLote";
+import { ZipPedido } from "../componentes/ZipPedido";
 import { Filtros } from "../componentes/Filtros";
 import { GradeDeMiniaturas } from "../componentes/Miniaturas";
 import { Aviso, BOTAO, Carregando, Status } from "../componentes/ui";
 import { dataCurta, LOTE_MAXIMO, pode, resumoDoEvento, rotuloDoDireito, tamanhoLegivel, tomDoDireito, type Evento as TEvento } from "../lib/dominio";
+import { pedirZip, type PedidoDeZip } from "../lib/download";
 import { useArquivos } from "../lib/useArquivos";
-import { emBreve } from "./EmBreve";
 
 // Um evento: os dados dele e a grade de miniaturas (com filtros por tipo, direito e texto).
-// Marketing/Admin: "Selecionar" liga o modo seleção — editar vários de uma vez ou mandar para a lixeira (Fase 3).
+// "Selecionar" liga o modo seleção. Todos: baixar os escolhidos em zip (Fase 4). Marketing/Admin: editar vários de uma
+// vez e mandar para a lixeira (Fase 3) e criar link externo (Fase 4).
 export default function Evento() {
   const { id = "" } = useParams();
   const { eu, avisar } = useApp();
@@ -21,7 +24,9 @@ export default function Evento() {
   const [erro, setErro] = useState<string | null>(null);
   const [selecionando, setSelecionando] = useState(false);
   const [ids, setIds] = useState<Set<string>>(new Set());
-  const [janela, setJanela] = useState<"lote" | "lixeira" | null>(null);
+  const [janela, setJanela] = useState<"lote" | "lixeira" | "link" | null>(null);
+  const [pedido, setPedido] = useState<PedidoDeZip | null>(null);
+  const [pedindo, setPedindo] = useState(false);
   const [recarga, setRecarga] = useState(0);
 
   useEffect(() => {
@@ -46,6 +51,20 @@ export default function Evento() {
   const feito = (msg: string) => { sair(); avisar(msg); lista.recarregar(); setRecarga((n) => n + 1); };
   const podeOrganizar = pode(eu.perfil, "organizar");
   const podeExcluir = pode(eu.perfil, "excluir");
+  const podeCompartilhar = pode(eu.perfil, "compartilhar");
+  // Zip do evento inteiro ou da seleção: o servidor prepara em segundo plano e avisa pelo Portal.
+  const zip = async (corpo: { evento_id: string } | { ids: string[] }) => {
+    if (pedindo) return;
+    setPedindo(true);
+    try {
+      setPedido(await pedirZip(corpo));
+      if ("ids" in corpo) sair();
+    } catch (e) {
+      if ((e as ErroApi).status !== 401) avisar((e as ErroApi).message);
+    } finally {
+      setPedindo(false);
+    }
+  };
   const voltar = <Link to="/" className={`${BOTAO.texto} mb-3`}>Voltar para eventos</Link>;
 
   if (erro) return <>{voltar}<Aviso tom="erro">{erro}</Aviso></>;
@@ -60,7 +79,11 @@ export default function Evento() {
           <>
             {pode(eu.perfil, "enviar") && <Link to={`/enviar?evento=${evento.id}`} className={BOTAO.principal}>Enviar arquivos</Link>}
             {podeOrganizar && <Link to={`/evento/${evento.id}/editar`} className={BOTAO.contorno}>Editar evento</Link>}
-            <button type="button" className={BOTAO.contorno} onClick={() => avisar(emBreve(4))}>Baixar todos (zip)</button>
+            {evento.total_arquivos > 0 && (
+              <button type="button" className={BOTAO.contorno} disabled={pedindo} onClick={() => zip({ evento_id: evento.id })}>
+                {pedindo ? "Pedindo…" : "Baixar todos (zip)"}
+              </button>
+            )}
           </>
         }
       >
@@ -86,7 +109,7 @@ export default function Evento() {
         <>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-secundario">{lista.total === 1 ? "1 arquivo" : `${lista.total} arquivos`}</p>
-            {podeOrganizar && lista.arquivos.length > 0 && !selecionando && (
+            {lista.arquivos.length > 0 && !selecionando && (
               <button type="button" className={BOTAO.texto} onClick={() => setSelecionando(true)}>Selecionar</button>
             )}
           </div>
@@ -106,7 +129,11 @@ export default function Evento() {
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-borda bg-superficie px-4 py-3 lg:left-16" role="region" aria-label="Arquivos selecionados">
           <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-5 gap-y-2 md:px-4">
             <p className="text-sm font-semibold text-titulo">{ids.size === 1 ? "1 selecionado" : `${ids.size} selecionados`}</p>
-            <button type="button" className={BOTAO.principal} disabled={!ids.size} onClick={() => setJanela("lote")}>Editar</button>
+            <button type="button" className={podeOrganizar ? BOTAO.contorno : BOTAO.principal} disabled={!ids.size || pedindo} onClick={() => zip({ ids: [...ids] })}>
+              {pedindo ? "Pedindo…" : "Baixar (zip)"}
+            </button>
+            {podeOrganizar && <button type="button" className={BOTAO.principal} disabled={!ids.size} onClick={() => setJanela("lote")}>Editar</button>}
+            {podeCompartilhar && <button type="button" className={BOTAO.contorno} disabled={!ids.size} onClick={() => setJanela("link")}>Link externo</button>}
             {podeExcluir && <button type="button" className={BOTAO.contorno} disabled={!ids.size} onClick={() => setJanela("lixeira")}>Mandar para a lixeira</button>}
             <button type="button" className={BOTAO.texto} onClick={() => setIds(new Set((lista.arquivos ?? []).slice(0, LOTE_MAXIMO).map((a) => a.id)))}>
               Selecionar os {Math.min(lista.arquivos?.length ?? 0, LOTE_MAXIMO)} da tela
@@ -116,6 +143,8 @@ export default function Evento() {
         </div>
       )}
       {janela === "lote" && <EdicaoEmLote ids={[...ids]} onFechar={() => setJanela(null)} onFeito={feito} />}
+      {janela === "link" && <CriarLink ids={[...ids]} tituloInicial={evento.nome} onFechar={sair} />}
+      {pedido && <ZipPedido resultado={pedido} onFechar={() => setPedido(null)} />}
       {janela === "lixeira" && (
         <ConfirmarLixeira
           titulo={ids.size === 1 ? "Mandar 1 arquivo para a lixeira?" : `Mandar ${ids.size} arquivos para a lixeira?`}

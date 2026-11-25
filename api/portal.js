@@ -2,15 +2,18 @@
 // (o plano Hobby da Vercel aceita no máximo 12 funções); o vercel.json repassa:
 //   POST /biblioteca/api/portal-evento        → ?rota=evento        aviso assinado ("sair" = encerrar as sessões do e-mail)
 //   POST /biblioteca/api/sincronizar-portal   → ?rota=sincronizar   conferência de acessos (Portal: "Conferir acessos")
-//   GET  /api/portal (cron diário da Vercel, com Authorization: Bearer CRON_SECRET) → conferência de acessos
+//   GET  /api/portal (cron diário da Vercel, com Authorization: Bearer CRON_SECRET) → conferência de acessos e,
+//        desde a Fase 4, a retomada dos zips parados (api/_zipador.js)
 //
 // ⚠️ Aviso: o corpo é lido CRU do fluxo e `req.body` nunca é tocado — a assinatura é do texto exato.
 // Conferência: o aviso só DISPARA; a lista vem sempre do Portal, buscada aqui com a senha do app. Este sistema não
 // tem lista própria de contas: conferir = derrubar a sessão de quem perdeu o acesso ou mudou de perfil (o banco faz,
 // na função sessoes_conferir_portal; o perfil novo vale na próxima entrada).
 
-import crypto from 'node:crypto';
-import { assinaturaValida, clienteDoBanco, parametros, perfilDe, portal, responder, responderErro } from './_comum.js';
+import { assinaturaValida, chamadaDoCron, clienteDoBanco, parametros, perfilDe, portal, responder, responderErro } from './_comum.js';
+import { continuarZipsParados } from './_zipador.js';
+
+export { chamadaDoCron };
 
 async function corpoCru(req) {
   const partes = [];
@@ -18,12 +21,6 @@ async function corpoCru(req) {
   return Buffer.concat(partes).toString('utf8');
 }
 
-export function chamadaDoCron(req) {
-  const cron = String(process.env.CRON_SECRET || '').trim();
-  const auth = String(req.headers.authorization || '');
-  const esperado = `Bearer ${cron}`;
-  return cron.length >= 16 && auth.length === esperado.length && crypto.timingSafeEqual(Buffer.from(auth), Buffer.from(esperado));
-}
 
 /** A lista do Portal no formato da função do banco: [{ email, perfil }] (perfil null = sem perfil válido aqui). */
 export function listaParaOBanco(pessoasPortal) {
@@ -58,7 +55,10 @@ async function sincronizar(req, res) {
   if (!r.ok || !Array.isArray(lista.pessoas)) return responder(res, 502, { erro: 'O Portal não devolveu a lista de acessos; nada foi mudado.' });
   const { data, error } = await clienteDoBanco().rpc('sessoes_conferir_portal', { p_pessoas: listaParaOBanco(lista.pessoas) });
   if (error) throw error;
-  return responder(res, 200, { ok: true, pessoas_com_acesso: lista.pessoas.length, sessoes_encerradas: data ?? 0 });
+  // No cron diário, também os zips parados (rotina que caiu) e os vencidos — Fase 4. Falha aqui não desfaz a conferência.
+  let zips = null;
+  if (chamadaDoCron(req)) zips = await continuarZipsParados().catch((e) => { console.error('[zip] cron:', e?.message || e); return null; });
+  return responder(res, 200, { ok: true, pessoas_com_acesso: lista.pessoas.length, sessoes_encerradas: data ?? 0, zips_retomados: zips });
 }
 
 export default async function handler(req, res) {

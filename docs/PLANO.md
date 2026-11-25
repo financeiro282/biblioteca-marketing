@@ -24,11 +24,27 @@ colaboradores consultam e baixam. Volume esperado acima de 1 TB, com muitos víd
 | `@noble/hashes` (MIT) | navegador | SHA-256 de arquivo grande em pedaços (duplicados) | o navegador só calcula com o arquivo inteiro na memória (vídeo de 4 GB travaria). É JavaScript puro: não precisa mudar o CSP |
 | `exifr` (MIT) | navegador | data de captura, câmera, orientação (JPG, HEIC, RAW) | ler EXIF à mão é muito código e frágil |
 | `heic-to` (LGPL-3.0) | navegador, só quando aparece HEIC | HEIC → JPG (prévia) | Chrome e Edge no Windows não abrem HEIC. Uso interno, sem modificar a biblioteca |
+| `@vercel/functions` (Apache-2.0, da própria Vercel) — **Fase 4, 25/11, para o Lucas confirmar** | servidor | `waitUntil`: o zip continua sendo montado depois de responder "pedido recebido" | é o jeito documentado da Vercel; sem ele, a função é congelada ao responder. Fazer à mão seria depender de um detalhe interno da Vercel |
 
 - As do navegador carregam só na tela de envio (o Colaborador nunca baixa).
 - ⚠️ O `heic-to` usa WebAssembly, e o CSP do Portal (`script-src 'self'`) não permite. Se o teste confirmar, o
   Lucas decide: (a) liberar só o WebAssembly (`'wasm-unsafe-eval'`) no CSP do Portal, com o Leo; ou (b) HEIC
   sem prévia, como o RAW.
+
+## Fase 4: como ficou (25/11/2026, proposta do Claude para o Lucas confirmar)
+
+| Ponto | Como ficou | Por quê |
+|---|---|---|
+| Baixar o original | link assinado do R2 com o nome original, 1 h para começar (todos os perfis, só o que a pessoa vê; vai para o log) | o arquivo vai direto do R2 ao navegador, sem passar pela Vercel |
+| Zip | montado **no servidor**, em segundo plano, lendo do R2 e gravando no R2; **partes de até 2 GB** ("parte 1 de N"); aviso pelo Portal; fica **7 dias** | cada parte cabe numa função da Vercel (5 min) e abre em qualquer programa (sem ZIP64); a pessoa pode fechar a página |
+| Arquivo acima de 1 GB | **não entra no zip**: baixa direto (aparece na lista do zip com "Baixar") | vídeo grande já é um arquivo só; dentro do zip só atrasaria |
+| Zips ao mesmo tempo | no máximo 3 sendo preparados por pessoa | evita pedido repetido sem querer |
+| Link externo | validade de 1 a 90 dias (padrão 7), senha opcional, revogar; o endereço aparece **uma vez** (o banco guarda só o sha256 do código) | quem tem o banco não tem os links |
+| Página do link | sem login; miniaturas, prévia, "Baixar" por arquivo e "Baixar todos" (um de cada vez) — **sem zip** | o visitante não dispara trabalho no servidor; zip para link pode vir depois, se o Marketing pedir |
+| Senha do link | o banco guarda só o scrypt; o servidor manda só a "prova"; **o banco compara e conta**: 5 erros → 15 min bloqueado | um erro no código do servidor não abre link com senha |
+| Direito no link | só "liberado" no arquivo **e** no evento, conferido na criação **e a cada acesso** | mudou o direito ou foi para a lixeira → some do link na hora |
+
+- **A medir no ar:** a velocidade do zip (o log da Vercel mostra MB/s por parte). Se 2 GB não couberem com folga em 5 min, diminuir a parte.
 
 ## Arquitetura
 
@@ -103,14 +119,14 @@ Navegador ──(1) pede links assinados────▶ api/ (Vercel, São Paulo
 | 1. Base | entrada pelo Portal, 3 perfis, layout padrão, modo demonstração, SQL + RLS provados no Postgres local | **feita em 24/11** |
 | 2. Envio | arrastar e soltar, envio em partes direto ao R2, retomada, duplicados, miniaturas, HEIC, capa de vídeo, data de captura | **feita e no ar em 25/11** (falta o teste grande: 300 fotos + vídeo de GB com queda) |
 | 3. Organização | criar/editar eventos, tags, direito de uso, favoritos, "Aprovadas", lixeira (mandar) | **feita em 25/11** (eventos no ar; arquivos: demonstração) |
-| 4. Download e links | original, zip em segundo plano com aviso pelo Portal, links externos com validade/senha/revogação | a fazer |
+| 4. Download e links | original, zip em segundo plano com aviso pelo Portal, links externos com validade/senha/revogação | **feita em 25/11 no modo demonstração**; no ar depois do SQL 02 e da regra `zips/` no Cloudflare (PASSO-A-PASSO, Fase 4) |
 | 5. Controle | lixeira (ver/restaurar/apagar de vez em 30 dias), painel de uso, alertas, log e relatórios | a fazer |
 | 6. Produção | bucket definitivo + cópia no B2, endereço e CSP no Portal, roteiro completo, restauração, carga dos 78 GB, liberação | a fazer |
 
 ## Limites que pesam
 
 - **Vercel Hobby:**
-  - No máximo 12 funções por projeto. A biblioteca usa 4 hoje e deve chegar a cerca de 10.
+  - No máximo 12 funções por projeto. A biblioteca usa 8 (25/11) e deve chegar a cerca de 10.
   - Tarefa agendada só uma vez por dia; função com no máximo 300 s; requisição de no máximo 4,5 MB. Por isso o arquivo vai direto do navegador ao R2.
   - Os termos da Vercel (seção 4) limitam o Hobby a uso não comercial. Isso vale para todos os sistemas da empresa; a decisão é do Leo.
 - **Riscos registrados:**

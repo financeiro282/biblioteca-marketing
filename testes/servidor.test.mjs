@@ -186,3 +186,178 @@ test('organizar arquivos e lixeira do evento: só JSON, ação conhecida, e sem 
   await eventos({ method: 'POST', url: '/api/eventos', headers: { 'content-type': 'application/json' }, body: { acao: 'lixeira', id: 'x' } }, res);
   assert.equal(res.codigo, 401);
 });
+
+// ── Fase 4: zip, download, senha e link externo ──────────────────────────────────────────────────────────
+
+// Leitor mínimo de zip (só o que o teste precisa): diretório central → nomes, CRC, tamanhos e o conteúdo.
+function lerZip(buf) {
+  const fim = buf.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+  assert.ok(fim >= 0, 'tem o fim do diretório');
+  const quantos = buf.readUInt16LE(fim + 10);
+  let p = buf.readUInt32LE(fim + 16);
+  const entradas = [];
+  for (let i = 0; i < quantos; i++) {
+    assert.equal(buf.readUInt32LE(p), 0x02014b50, 'entrada central');
+    const flags = buf.readUInt16LE(p + 8);
+    const crc = buf.readUInt32LE(p + 16);
+    const tamanho = buf.readUInt32LE(p + 24);
+    const nomeLen = buf.readUInt16LE(p + 28);
+    const local = buf.readUInt32LE(p + 42);
+    const nome = buf.subarray(p + 46, p + 46 + nomeLen).toString('utf8');
+    assert.equal(buf.readUInt32LE(local), 0x04034b50, `cabeçalho local de ${nome}`);
+    const ini = local + 30 + buf.readUInt16LE(local + 26) + buf.readUInt16LE(local + 28);
+    const dados = buf.subarray(ini, ini + tamanho);
+    assert.equal(buf.readUInt32LE(ini + tamanho), 0x08074b50, `descritor depois de ${nome}`);
+    entradas.push({ nome, flags, crc, tamanho, dados });
+    p += 46 + nomeLen;
+  }
+  return entradas;
+}
+
+test('zip: monta em fluxo, na ordem, com CRC certo, nomes UTF-8 e blocos iguais (regra do R2); abre no tar do Windows', async () => {
+  const { montarZip, juntadorDePartes, dataDos } = await import('../api/_zip.js');
+  const { nomesNoZip } = await import('../compartilhado/download.js');
+  const zlib = await import('node:zlib');
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const arquivos = [
+    { chave: 'a', nome: 'Palestra — São Paulo.JPG', evento: 'Convenção', dados: crypto.randomBytes(9 * 1024 * 1024 + 7) },
+    { chave: 'b', nome: 'IMG_1.HEIC', evento: 'Convenção', dados: crypto.randomBytes(1000) },
+    { chave: 'c', nome: 'IMG_1.HEIC', evento: 'Convenção', dados: crypto.randomBytes(2000) },
+  ];
+  const nomes = nomesNoZip(arquivos);
+  assert.deepEqual(nomes, ['Palestra — São Paulo.JPG', 'IMG_1.HEIC', 'IMG_1 (2).HEIC'], 'um evento só: sem pasta; repetido ganha (2)');
+  const blocos = [];
+  const saida = juntadorDePartes({ tamanhoParte: 5 * 1024 * 1024, enviar: async (n, b) => { blocos[n - 1] = Buffer.from(b); return `e${n}`; } });
+  const porChave = new Map(arquivos.map((a) => [a.chave, a.dados]));
+  const r = await montarZip({
+    arquivos: arquivos.map((a, i) => ({ chave: a.chave, nomeNoZip: nomes[i], tamanho: a.dados.length, data: '2026-10-01T13:45:10Z' })),
+    // leituras que voltam fora de ordem (cada uma demora diferente): o zip tem de sair na ordem certa
+    ler: async (c, ini, fim) => { await new Promise((ok) => setTimeout(ok, Math.random() * 8)); return new Uint8Array(porChave.get(c).subarray(ini, fim)); },
+    escrever: (b) => saida.escrever(b), pedaco: 2 * 1024 * 1024,
+  });
+  const partes = await saida.terminar();
+  const zip = Buffer.concat(blocos);
+  assert.equal(r.bytes, zip.length);
+  assert.equal(r.arquivos, 3);
+  assert.deepEqual(partes.map((p) => p.numero), blocos.map((_, i) => i + 1));
+  assert.ok(blocos.slice(0, -1).every((b) => b.length === 5 * 1024 * 1024), 'todos os blocos iguais, menos o último');
+  const lidas = lerZip(zip);
+  for (const [i, e] of lidas.entries()) {
+    assert.equal(e.nome, nomes[i]);
+    assert.equal(e.flags, 0x0808, 'descritor depois + UTF-8');
+    assert.equal(e.tamanho, arquivos[i].dados.length);
+    assert.ok(e.dados.equals(arquivos[i].dados), `conteúdo de ${e.nome}`);
+    assert.equal(e.crc, zlib.crc32(arquivos[i].dados));
+  }
+  const d = dataDos('2026-10-01T13:45:10Z');
+  assert.equal(d.hora >> 11, 10, 'hora de Brasília (13:45 UTC = 10:45)');
+  assert.equal((d.dia >> 9) + 1980, 2026);
+  // Leitura que falha: o erro sobe (a rotina marca a parte para tentar de novo)
+  await assert.rejects(montarZip({ arquivos: [{ chave: 'x', nomeNoZip: 'x', tamanho: 10 }], ler: async () => { throw new Error('R2 fora'); }, escrever: async () => {} }), /R2 fora/);
+  await assert.rejects(montarZip({ arquivos: [{ chave: 'x', nomeNoZip: 'x', tamanho: 10 }], ler: async () => new Uint8Array(5), escrever: async () => {} }), /incompleta/);
+  // O tar do Windows (o mesmo formato que o Explorer abre), se existir nesta máquina
+  const tar = 'C:/Windows/System32/tar.exe';
+  if (fs.existsSync(tar)) {
+    const { execFileSync } = await import('node:child_process');
+    const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'zip-'));
+    fs.writeFileSync(path.join(pasta, 't.zip'), zip);
+    execFileSync(tar, ['-xf', path.join(pasta, 't.zip'), '-C', pasta]);
+    assert.ok(fs.readFileSync(path.join(pasta, 'IMG_1 (2).HEIC')).equals(arquivos[2].dados), 'o tar do Windows extrai igual');
+    assert.ok(fs.readFileSync(path.join(pasta, 'Palestra — São Paulo.JPG')).equals(arquivos[0].dados), 'nome com acento e travessão');
+    fs.rmSync(pasta, { recursive: true, force: true });
+  }
+});
+
+test('juntador: parte que falha 3 vezes derruba o zip; falha passageira é repetida', async () => {
+  const { juntadorDePartes } = await import('../api/_zip.js');
+  let tentativas = 0;
+  const ok = juntadorDePartes({ tamanhoParte: 4, enviar: async () => { if (++tentativas === 1) throw new Error('oscilou'); return 'e'; } });
+  await ok.escrever(new Uint8Array(10));
+  assert.equal((await ok.terminar()).length, 3, '10 bytes em blocos de 4 = 3 partes (a 1ª repetida)');
+  const ruim = juntadorDePartes({ tamanhoParte: 4, enviar: async () => { throw new Error('R2 recusou'); } });
+  await assert.rejects(async () => { await ruim.escrever(new Uint8Array(4)); await ruim.terminar(); }, /R2 recusou/);
+});
+
+test('senha do link: só o hash scrypt vai ao banco; a prova bate com a senha certa e com nenhuma outra', async () => {
+  const { hashDaSenha, provaDaSenha } = await import('../api/_senha.js');
+  const h = await hashDaSenha('senha certa');
+  const m = /^(scrypt\$16384\$8\$1\$[A-Za-z0-9_-]{22})\$([A-Za-z0-9_-]{43})$/.exec(h);
+  assert.ok(m, h);
+  assert.ok(!h.includes('senha certa'));
+  assert.equal(await provaDaSenha('senha certa', m[1]), m[2]);
+  assert.notEqual(await provaDaSenha('senha errada', m[1]), m[2]);
+  assert.equal(await provaDaSenha('x', 'scrypt$1048576$8$1$AAAAAAAAAAAAAAAAAAAAAA'), null, 'custo diferente do deste sistema: não calcula');
+  assert.equal(await provaDaSenha('x', 'qualquer coisa'), null);
+  assert.notEqual(await hashDaSenha('senha certa'), h, 'sal novo a cada link');
+});
+
+test('download: link assinado com o nome original (Content-Disposition), 1 h para começar', async () => {
+  const r2 = await import('../api/_r2.js');
+  const antes = { ...process.env };
+  Object.assign(process.env, { R2_CONTA: 'a'.repeat(32), R2_CHAVE_ID: 'id-de-teste', R2_CHAVE_SEGREDO: 'segredo-de-teste', R2_BUCKET: 'importek-biblioteca-teste' });
+  try {
+    const u = new URL(await r2.linkDeDownload('originais/2026/x.jpg', 'Palestra de abertura (São Paulo).JPG'));
+    assert.equal(u.pathname, '/importek-biblioteca-teste/originais/2026/x.jpg');
+    assert.equal(u.searchParams.get('X-Amz-Expires'), '3600');
+    assert.equal(u.searchParams.get('response-content-disposition'),
+      "attachment;filename*=UTF-8''Palestra%20de%20abertura%20%28S%C3%A3o%20Paulo%29.JPG");
+    assert.match(u.searchParams.get('X-Amz-Signature'), /^[0-9a-f]{64}$/);
+  } finally {
+    for (const k of ['R2_CONTA', 'R2_CHAVE_ID', 'R2_CHAVE_SEGREDO', 'R2_BUCKET']) { if (antes[k] === undefined) delete process.env[k]; else process.env[k] = antes[k]; }
+  }
+});
+
+test('zips, links e baixar: sem cookie respondem 401; a rotina só com o CRON_SECRET', async () => {
+  const zips = (await import('../api/zips.js')).default;
+  const links = (await import('../api/links.js')).default;
+  const json = { 'content-type': 'application/json' };
+  const casos = [
+    [zips, { method: 'GET', url: '/api/zips', headers: {} }],
+    [zips, { method: 'GET', url: '/api/zips?baixar=x&parte=1', headers: {} }],
+    [zips, { method: 'POST', url: '/api/zips', headers: json, body: { acao: 'pedir', ids: [crypto.randomUUID()] } }],
+    [links, { method: 'GET', url: '/api/links', headers: {} }],
+    [links, { method: 'POST', url: '/api/links', headers: json, body: { acao: 'revogar', id: crypto.randomUUID() } }],
+    [arquivos, { method: 'GET', url: `/api/arquivos?baixar=${crypto.randomUUID()}`, headers: {} }],
+  ];
+  for (const [fn, req] of casos) {
+    const res = resposta();
+    await fn(req, res);
+    assert.equal(res.codigo, 401, `${req.method} ${req.url} ${req.body?.acao ?? ''}`);
+  }
+  let res = resposta();
+  await zips({ method: 'POST', url: '/api/zips', headers: { ...json, authorization: 'Bearer errado' }, body: { acao: 'gerar', id: crypto.randomUUID() } }, res);
+  assert.equal(res.codigo, 401, 'rotina sem o segredo certo');
+  res = resposta();
+  await zips({ method: 'POST', url: '/api/zips', headers: json, body: { acao: 'apagar' } }, res);
+  assert.equal(res.codigo, 400);
+});
+
+test('link externo (visitante): sem código no formato certo, 404 sem chegar ao banco; só POST com JSON', async () => {
+  const externo = (await import('../api/externo.js')).default;
+  const json = { 'content-type': 'application/json' };
+  let res = resposta();
+  await externo({ method: 'GET', url: '/api/externo', headers: {} }, res);
+  assert.equal(res.codigo, 405);
+  res = resposta();
+  await externo({ method: 'POST', url: '/api/externo', headers: { 'content-type': 'text/plain' }, body: 'x' }, res);
+  assert.equal(res.codigo, 415);
+  for (const codigo of [undefined, '', 'curto', 'x'.repeat(43) + '!', 'a'.repeat(44)]) {
+    res = resposta();
+    await externo({ method: 'POST', url: '/api/externo', headers: json, body: { acao: 'abrir', codigo } }, res);
+    assert.equal(res.codigo, 404, String(codigo));
+    assert.equal(res.corpo.situacao, 'nao_encontrado');
+  }
+  res = resposta();
+  await externo({ method: 'POST', url: '/api/externo', headers: json, body: { acao: 'apagar', codigo: 'a'.repeat(43) } }, res);
+  assert.equal(res.codigo, 400);
+  const { enderecoDoLink } = await import('../api/links.js');
+  const antes = process.env.PORTAL_URL;
+  process.env.PORTAL_URL = 'https://portal-importek.vercel.app/';
+  try {
+    assert.equal(enderecoDoLink('A'.repeat(43)), `https://portal-importek.vercel.app/biblioteca/l#${'A'.repeat(43)}`, 'endereço do Portal, código depois do #');
+  } finally {
+    if (antes === undefined) delete process.env.PORTAL_URL; else process.env.PORTAL_URL = antes;
+  }
+});

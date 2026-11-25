@@ -234,6 +234,14 @@ export function assinaturaValida(cabecalho, segredo, corpo = null, agora = Date.
   return crypto.timingSafeEqual(esperado, Buffer.from(m[2], 'hex'));
 }
 
+// Chamada do próprio servidor ou do cron diário da Vercel: Authorization: Bearer CRON_SECRET (comparação em tempo fixo).
+export function chamadaDoCron(req) {
+  const cron = String(process.env.CRON_SECRET || '').trim();
+  const auth = String(req.headers.authorization || '');
+  const esperado = `Bearer ${cron}`;
+  return cron.length >= 16 && auth.length === esperado.length && crypto.timingSafeEqual(Buffer.from(auth), Buffer.from(esperado));
+}
+
 // Caminho de volta dentro do app: só caminho relativo daqui, nunca outro site.
 export function voltaValida(v) {
   return typeof v === 'string' && /^\/(?![/\\])[^\s\\#]{0,500}$/.test(v) ? v : null;

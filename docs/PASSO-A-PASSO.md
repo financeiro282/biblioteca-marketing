@@ -162,11 +162,67 @@ Só o endereço da conta, nunca `*.r2.cloudflarestorage.com` (isso liberaria o b
 da biblioteca usa links no formato `https://<ID>.r2.cloudflarestorage.com/<bucket>/…`. Se a Fase 2 precisar de
 mais alguma coisa no CSP, isso vem escrito aqui antes da publicação.
 
+## Fase 4: download, zip e links externos (25/11/2026)
+
+O código está pronto e testado no modo demonstração. Para ir ao ar, falta um SQL novo e uma regra no Cloudflare.
+**A ordem importa:** primeiro o SQL (passo 1), depois a publicação (passo 3). O SQL só acrescenta: o sistema que
+está no ar hoje continua funcionando igual com ele.
+
+### 1. SQL 02 no banco do Portal (Leo revisa, Lucas roda, com backup) — FEITO em 25/11/2026 (Leo revisou; Lucas rodou; conferência 8/8 ok; fotografia e checagem iguais)
+
+Arquivos: `importek-sistemas/banco/biblioteca/02-download-e-links.sql` e `02-desfazer.sql`.
+- **O que faz:** só acrescenta, só na área `biblioteca`, nenhuma tabela nova.
+  - 4 colunas: título do zip; acessos, downloads e último acesso do link.
+  - 8 funções: a rotina do zip, que roda sem a pessoa logada, e o link externo, aberto por quem não tem conta.
+  - O banco confere de novo o direito de uso de cada arquivo, no zip e a cada acesso ao link. A senha do link é conferida pelo banco: 5 erros bloqueiam por 15 min.
+- **Prova:** `scripts/testa-banco-biblioteca.mjs` (PGlite): **269/269** em 25/11/2026 (188 do 01 + 81 do 02).
+- **Como rodar** (o mesmo roteiro do 01, no `LEIA-ME.md` do banco):
+  1. Backup conferido. Rode a fotografia (`00-fotografia-portal.sql`) e a checagem e **salve as duas**.
+  2. SQL Editor → colar o `02-download-e-links.sql` **inteiro** → Run.
+     O fim mostra uma **conferência de 8 linhas, todas com `ok = true`**.
+  3. Rode a fotografia e a checagem de novo: têm de sair **iguais às de antes**.
+  4. Deu errado? `02-desfazer.sql` inteiro (conferência de 3 linhas `ok = true`).
+
+### 2. Cloudflare: os zips se apagam sozinhos em 7 dias — FEITO em 25/11/2026 (regra `zips/` criada pelo Lucas)
+
+R2 Object Storage → bucket `importek-biblioteca` → aba **Settings** → **Object Lifecycle Rules** → **Add rule**
+(caminho da documentação da Cloudflare, `developers.cloudflare.com/r2/buckets/object-lifecycles`):
+- **Nome:** `zips-7-dias`
+- **Onde vale:** só o **prefixo** `zips/` (com a barra; **nunca** o bucket inteiro)
+- **Ação:** a que apaga/expira os objetos, depois de **7 dias**. As outras ações (Infrequent Access, envio
+  incompleto) ficam desmarcadas nesta regra.
+- **Save changes.**
+
+A documentação não dá o nome de cada campo do formulário: se a tela vier diferente, mande o que aparece.
+Envio em partes não terminado: todo bucket já tem uma regra padrão que o descarta em 7 dias (não precisa criar).
+O R2 apaga em até ~24 h depois do prazo; a tela "Meus downloads" já mostra o zip como vencido no 7º dia.
+
+### 3. Publicar (o Claude faz o commit e o push quando o Lucas pedir)
+
+- **Na Vercel, nada novo:** `CRON_SECRET`, `PORTAL_URL` e `PORTAL_SEGREDO` já existem.
+- **Variáveis do sistema:** a rotina do zip chama o próprio endereço do projeto. Confira em Settings → Environment
+  Variables que **"Automatically expose System Environment Variables"** está marcado. Vem marcado por padrão.
+- **No Portal, nada novo:**
+  - A página do link externo (`/biblioteca/l`) passa pelo mesmo desvio de `/biblioteca*`.
+  - O CSP já libera as miniaturas do R2. O download é uma ida direta ao R2, que o CSP não bloqueia.
+  - O aviso "zip pronto" usa o `/api/notificar` do Portal, que já existe (contrato, item 7).
+
+### 4. Testar no ar (Lucas, pelo card)
+
+1. Numa foto: **Baixar original**. O arquivo chega com o nome original.
+2. No evento de teste: **Baixar todos (zip)**. Em alguns minutos chega o aviso no sininho do Portal. Em
+   **Meus downloads**, baixe o zip e abra no Windows.
+3. **Selecionar** 3 fotos → **Link externo** com senha → copiar o endereço → abrir numa **janela anônima**:
+   - senha errada mostra "Restam 4 tentativas";
+   - com a senha certa, aparecem as fotos e o "Baixar todos".
+4. Em **Links externos**: **Revogar**. A janela anônima, recarregada, diz "cancelado".
+5. O Claude confere os registros da Vercel. Lá ficam a velocidade do zip (MB/s) e qualquer erro.
+
 ## Fase 6: produção e cópia de segurança
 
 1. **Cloudflare:** o bucket `importek-biblioteca` (já criado em 25/11/2026). **Antes de liberar: apagar os eventos e
    os arquivos de teste** (banco e R2).
-   - Regra de ciclo de vida: abortar envio incompleto em 7 dias e apagar `zips/` em 7 dias.
+   - Regras de ciclo de vida: já na Fase 4 (passo 2 acima). Conferir que continuam lá.
    - Alerta de cobrança da conta.
 2. **Backblaze (Lucas):**
    - criar a conta e o bucket `importek-biblioteca-copia` com **Object Lock** ligado na criação (retenção padrão de 30 dias);

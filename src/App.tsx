@@ -13,6 +13,9 @@ import Arquivos from "./paginas/Arquivos";
 import Arquivo from "./paginas/Arquivo";
 import EmBreve from "./paginas/EmBreve";
 import Enviar from "./paginas/Enviar";
+import Downloads from "./paginas/Downloads";
+import Links from "./paginas/Links";
+import LinkExterno from "./paginas/LinkExterno";
 
 // ── Contexto: quem está aqui e o aviso flutuante ──
 type Ctx = { eu: Eu; avisar: (msg: string) => void };
@@ -100,15 +103,9 @@ function Protegido() {
           <Route path="/favoritos" element={<Arquivos modo="favoritos" />} />
           <Route path="/aprovadas" element={<Arquivos modo="aprovadas" />} />
           <Route path="/arquivo/:id" element={<Arquivo />} />
-          <Route path="/downloads" element={<EmBreve titulo="Meus downloads" fase={4} itens={[
-            "Zips pedidos (um ou vários arquivos), gerados em segundo plano.",
-            "Aviso pelo Portal (sininho e notificação) quando o zip ficar pronto. Cada zip fica 7 dias.",
-          ]} />} />
+          <Route path="/downloads" element={<Downloads />} />
           <Route path="/enviar" element={<ComPermissao permissao="enviar"><Enviar /></ComPermissao>} />
-          <Route path="/links" element={<ComPermissao permissao="compartilhar"><EmBreve titulo="Links externos" fase={4} itens={[
-            "Link para agência ou imprensa com validade (até 90 dias), senha opcional e revogação.",
-            "Só arquivos com uso liberado. Toda abertura e download registrados no log.",
-          ]} /></ComPermissao>} />
+          <Route path="/links" element={<ComPermissao permissao="compartilhar"><Links /></ComPermissao>} />
           <Route path="/uso" element={<ComPermissao permissao="ver_uso"><EmBreve titulo="Painel de uso" fase={5} itens={[
             "Espaço por evento e total, crescimento mensal e custo estimado do mês.",
             "Alertas ao passar dos limites configurados (ex.: 1 TB, 2 TB).",
@@ -142,6 +139,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/entrar-portal" element={<EntrarPortal />} />
+      {/* Link externo (Fase 4): página PÚBLICA, sem sessão nem menu — quem abre não tem conta no Portal. */}
+      <Route path="/l" element={<LinkExterno />} />
       <Route path="/*" element={<Protegido />} />
     </Routes>
   );

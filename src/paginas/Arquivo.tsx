@@ -2,17 +2,19 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, ErroApi } from "../api";
 import { useApp } from "../App";
+import { CriarLink } from "../componentes/CriarLink";
 import { ConfirmarLixeira, resumoDoLote } from "../componentes/EdicaoEmLote";
 import { AREA, Aviso, BOTAO, CAMPO, Campo, Carregando, Janela, LISTA, Status, cn } from "../componentes/ui";
 import {
   dataCurta, dataHoraBrasil, duracaoLegivel, FORMATOS, LIMITES_ARQUIVO, lerArquivoEditado, pode, podeAprovar,
   podeCompartilharExternamente, rotuloDoDireito, rotuloDoTipo, tamanhoLegivel, tomDoDireito, type Arquivo as TArquivo,
 } from "../lib/dominio";
-import { emBreve } from "./EmBreve";
+import { baixarOriginal } from "../lib/download";
 
 // Ficha de um arquivo: a prévia grande (só aqui; a grade carrega só miniaturas), os dados e as ações.
 // "Anterior/Próximo" (e as setas do teclado) andam pela lista de onde a pessoa veio.
 // Fase 3 (25/11/2026): favoritar (todos), editar, aprovar, capa do evento e lixeira (Marketing/Admin).
+// Fase 4: baixar o original (todos) e link externo (Marketing/Admin, só "Uso liberado").
 export default function Arquivo() {
   const { id = "" } = useParams();
   const { eu, avisar } = useApp();
@@ -21,7 +23,8 @@ export default function Arquivo() {
   const lista: string[] = (local.state as { lista?: string[] } | null)?.lista ?? [];
   const [arquivo, setArquivo] = useState<TArquivo | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const [janela, setJanela] = useState<"editar" | "lixeira" | null>(null);
+  const [janela, setJanela] = useState<"editar" | "lixeira" | "link" | null>(null);
+  const [baixando, setBaixando] = useState(false);
   const [ocupado, setOcupado] = useState(false);
   const [recarga, setRecarga] = useState(0);
 
@@ -109,7 +112,13 @@ export default function Arquivo() {
           </div>
 
           <div className="flex flex-col gap-2">
-            <button type="button" className={BOTAO.principal} onClick={() => avisar(emBreve(4))}>Baixar original</button>
+            <button type="button" className={BOTAO.principal} disabled={baixando}
+              onClick={async () => {
+                setBaixando(true);
+                try { await baixarOriginal(a.id); } catch (e) { if ((e as ErroApi).status !== 401) avisar((e as ErroApi).message); } finally { setBaixando(false); }
+              }}>
+              {baixando ? "Abrindo…" : `Baixar original (${tamanhoLegivel(a.tamanho_bytes)})`}
+            </button>
             <div className="flex flex-wrap gap-2">
               <button type="button" className={BOTAO.contorno} disabled={ocupado} aria-pressed={a.favorito}
                 onClick={() => acao({ acao: "favoritar", id: a.id, favorito: !a.favorito }, () => (a.favorito ? "Tirado dos favoritos." : "Nos seus favoritos."))}>
@@ -125,7 +134,7 @@ export default function Arquivo() {
                 </button>
               )}
               {pode(eu.perfil, "compartilhar") && (
-                <button type="button" className={BOTAO.contorno} disabled={!compartilhavel} onClick={() => avisar(emBreve(4))}
+                <button type="button" className={BOTAO.contorno} disabled={!compartilhavel} onClick={() => setJanela("link")}
                   title={compartilhavel ? undefined : "Só arquivos com uso liberado podem ir para link externo."}>
                   Link externo
                 </button>
@@ -175,6 +184,7 @@ export default function Arquivo() {
         <EditarArquivo arquivo={a} onFechar={() => setJanela(null)}
           onSalvo={() => { setJanela(null); avisar("Arquivo salvo."); setRecarga((n) => n + 1); }} />
       )}
+      {janela === "link" && <CriarLink ids={[a.id]} tituloInicial={a.evento_nome} onFechar={() => setJanela(null)} />}
       {janela === "lixeira" && (
         <ConfirmarLixeira
           titulo="Mandar este arquivo para a lixeira?"

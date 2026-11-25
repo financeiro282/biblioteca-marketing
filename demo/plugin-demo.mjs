@@ -11,7 +11,7 @@
 //
 // Rota nova numa fase nova → acrescentar em ROTAS (e os dados em dados-demo.mjs) e um caso em testes/demo.test.mjs.
 
-import { randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, scryptSync } from 'node:crypto';
 import { bate, ehUuid, lerFiltros, normalizar, POR_PAGINA } from '../compartilhado/busca.js';
 import { direitoEfetivo } from '../compartilhado/direito.js';
 import { camposAlterados, lerEvento } from '../compartilhado/evento.js';
@@ -19,7 +19,11 @@ import { lerArquivoEditado, lerIds, lerLote, podeAprovar, tagsDepois } from '../
 import {
   anoDaChave, chaveMiniatura, chaveOriginal, chavePrevia, lerInicio, lerMetadados, lerPartes, PARTES_POR_PEDIDO, planoDeEnvio,
 } from '../compartilhado/envio.js';
+import {
+  disposicao, formatoDoCodigo, lerLink, lerPedidoZip, nomeDoZip, nomesNoZip, planoDoZip, situacaoDoLink, ZIPS_ATIVOS_POR_PESSOA, zipParaTela,
+} from '../compartilhado/download.js';
 import { pode } from '../compartilhado/perfis.js';
+import { montarZip } from '../api/_zip.js';
 import { arquivoVisivel, eventoVisivel, paraConsulta } from '../compartilhado/visibilidade.js';
 import * as D from './dados-demo.mjs';
 
@@ -262,6 +266,178 @@ async function r2Ficticio(req, res) {
   res.end();
 }
 
+// ── Fase 4: download, zip e link externo ─────────────────────────────────────────────────────────────────
+// Download: a imagem fictícia (SVG) com o NOME do original. Zip: montado DE VERDADE (api/_zip.js) com essas imagens;
+// cada parte "fica pronta" 3 s depois da anterior (a rotina de verdade leva minutos). Link externo: a mesma regra do
+// banco (só "liberado" em evento "liberado", senha pelo scrypt, 5 erros → 15 min), na memória do `npm run dev`.
+const BAIXAR = `${BASE}/__demo/baixar`;
+export const relogio = { agora: () => Date.now() };       // os testes adiantam o relógio
+const SEG_POR_PARTE = 3000;
+const ZIPS = [];
+const LINKS = [];
+const sha256 = (t) => createHash('sha256').update(String(t)).digest('hex');
+const porCaptura = (x, y) => String(x.capturado_em).localeCompare(String(y.capturado_em)) || x.nome_original.localeCompare(y.nome_original);
+
+function zipNoMomento(z) {
+  const agora = relogio.agora();
+  const partes = z.partes.map((p, i) => {
+    const pronta = agora >= z.criado + (i + 1) * SEG_POR_PARTE;
+    const gerando = !pronta && agora >= z.criado + i * SEG_POR_PARTE;
+    return { ...p, situacao: pronta ? 'pronto' : gerando ? 'gerando' : 'na_fila', ...(pronta ? { bytes_zip: p.bytes + 22 * p.ids.length, arquivos: p.ids.length } : {}) };
+  });
+  const tudo = partes.every((p) => p.situacao === 'pronto');
+  const fim = z.criado + z.partes.length * SEG_POR_PARTE;
+  return {
+    id: z.id, titulo: z.titulo, arquivo_ids: z.arquivo_ids, partes, erro: null,
+    situacao: tudo ? 'pronto' : partes.some((p) => p.situacao !== 'na_fila') ? 'gerando' : 'na_fila',
+    criado_em: new Date(z.criado).toISOString(), pronto_em: tudo ? new Date(fim).toISOString() : null,
+    expira_em: tudo ? new Date(fim + 7 * 86_400_000).toISOString() : null,
+    total_bytes: partes.reduce((s, p) => s + (p.bytes_zip ?? p.bytes), 0),
+  };
+}
+const foraDe = (z) => {
+  const noZip = new Set(z.partes.flatMap((p) => p.ids));
+  return new Map(z.arquivo_ids.filter((id) => !noZip.has(id)).map((id) => D.ARQUIVOS.find((a) => a.id === id))
+    .map((a) => [a.id, { id: a.id, nome_original: a.nome_original, tamanho_bytes: a.tamanho_bytes }]));
+};
+
+function pedirZipDemo(corpo) {
+  const pedido = lerPedidoZip(corpo);
+  if (pedido.erro) return [400, { erro: pedido.erro }];
+  const ativos = ZIPS.filter((z) => z.perfil === estado.perfil && ['na_fila', 'gerando'].includes(zipNoMomento(z).situacao));
+  if (ativos.length >= ZIPS_ATIVOS_POR_PESSOA) {
+    return [429, { erro: `Você já tem ${ZIPS_ATIVOS_POR_PESSOA} zips sendo preparados. Espere um deles ficar pronto em "Meus downloads".`, codigo: 'muitos_zips' }];
+  }
+  const visiveis = arquivosDoPerfil(estado.perfil);
+  let arquivos;
+  let titulo;
+  if (pedido.evento_id) {
+    const ev = eventosDoPerfil(estado.perfil).find((e) => e.id === pedido.evento_id);
+    if (!ev) return [404, { erro: 'Evento não encontrado.', codigo: 'nao_encontrado' }];
+    arquivos = visiveis.filter((a) => a.evento_id === ev.id).sort(porCaptura);
+    titulo = ev.nome;
+  } else {
+    const ordem = new Map(pedido.ids.map((id, i) => [id, i]));
+    arquivos = visiveis.filter((a) => ordem.has(a.id)).sort((x, y) => ordem.get(x.id) - ordem.get(y.id));
+    const eventos = new Set(arquivos.map((a) => POR_EVENTO.get(a.evento_id).nome));
+    const qtd = `${arquivos.length} ${arquivos.length === 1 ? 'arquivo' : 'arquivos'}`;
+    titulo = eventos.size === 1 ? `${[...eventos][0]} (${qtd})` : `Seleção de ${qtd}`;
+  }
+  if (!arquivos.length) return [400, { erro: 'Nenhum arquivo para baixar.', codigo: 'vazio' }];
+  const plano = planoDoZip(arquivos);
+  const fora = plano.fora.map((id) => arquivos.find((a) => a.id === id)).map((a) => ({ id: a.id, nome_original: a.nome_original, tamanho_bytes: a.tamanho_bytes }));
+  if (!plano.partes.length) return [200, { zip: null, fora }];
+  const z = { id: randomUUID(), perfil: estado.perfil, titulo, arquivo_ids: arquivos.map((a) => a.id), partes: plano.partes, criado: relogio.agora() };
+  ZIPS.unshift(z);
+  return [200, { zip: zipParaTela(zipNoMomento(z), foraDe(z), relogio.agora()), fora }];
+}
+
+const liberadoParaLink = (a) => {
+  const ev = a && POR_EVENTO.get(a.evento_id);
+  return !!ev && paraConsulta(a, ev) && a.direito_uso === 'liberado' && ev.direito_uso === 'liberado';
+};
+const SAL_DEMO = /^scrypt\$16384\$8\$1\$[A-Za-z0-9_-]{16,64}$/;
+const provaDemo = (senha, sal) => (SAL_DEMO.test(sal)
+  ? scryptSync(String(senha).normalize('NFC'), sal.split('$')[4], 32, { N: 16384, r: 8, p: 1 }).toString('base64url') : null);
+
+function linkParaTelaDemo(l) {
+  return {
+    id: l.id, titulo: l.titulo, destinatario: l.destinatario, mensagem: l.mensagem, expira_em: l.expira_em,
+    revogado_em: l.revogado_em, revogado_por_nome: l.revogado_por_nome ?? null, criado_em: l.criado_em,
+    criado_por_nome: l.criado_por_nome, acessos: l.acessos, downloads: l.downloads, ultimo_acesso_em: l.ultimo_acesso_em,
+    com_senha: !!l.senha_hash, arquivos: l.ids.length, situacao: situacaoDoLink(l, relogio.agora()),
+  };
+}
+
+function criarLinkDemo(corpo) {
+  const r = lerLink(corpo);
+  if (r.erros) return [400, { erro: 'Confira os campos marcados.', codigo: 'campos', erros: r.erros }];
+  const v = r.valores;
+  const permitidos = v.ids.filter((id) => liberadoParaLink(D.ARQUIVOS.find((a) => a.id === id)));
+  if (!permitidos.length) {
+    return [400, { erro: 'Nenhum dos arquivos escolhidos tem uso liberado. Link externo só leva arquivo com "Uso liberado" (no arquivo e no evento).', codigo: 'sem_liberado' }];
+  }
+  const codigo = randomBytes(32).toString('base64url');
+  const sal = `scrypt$16384$8$1$${randomBytes(16).toString('base64url')}`;
+  const agora = relogio.agora();
+  const l = {
+    id: randomUUID(), codigo_hash: sha256(codigo), titulo: v.titulo, destinatario: v.destinatario, mensagem: v.mensagem,
+    senha_hash: v.senha ? `${sal}$${provaDemo(v.senha, sal)}` : null, expira_em: new Date(agora + v.dias * 86_400_000).toISOString(),
+    revogado_em: null, ids: permitidos, acessos: 0, downloads: 0, ultimo_acesso_em: null, tentativas: 0, bloqueado_ate: null,
+    criado_em: new Date(agora).toISOString(), criado_por_nome: D.PESSOA.nome,
+  };
+  LINKS.unshift(l);
+  return [200, { link: { id: l.id, expira_em: l.expira_em }, endereco: `${BASE}/l#${codigo}`, incluidos: permitidos.length, recusados: v.ids.length - permitidos.length }];
+}
+
+function externoDemo(corpo) {
+  if (corpo.acao !== 'abrir' && corpo.acao !== 'baixar') return [400, { erro: 'Ação desconhecida.' }];
+  if (!formatoDoCodigo(corpo.codigo)) return [404, { situacao: 'nao_encontrado' }];
+  const l = LINKS.find((x) => x.codigo_hash === sha256(corpo.codigo));
+  const agora = relogio.agora();
+  if (!l) return [404, { situacao: 'nao_encontrado' }];
+  if (l.revogado_em) return [200, { situacao: 'revogado' }];
+  if (Date.parse(l.expira_em) <= agora) return [200, { situacao: 'expirado' }];
+  if (l.bloqueado_ate && Date.parse(l.bloqueado_ate) > agora) return [200, { situacao: 'bloqueado', ate: l.bloqueado_ate }];
+  if (l.senha_hash) {
+    if (!corpo.senha) return [200, { situacao: 'senha' }];
+    if (provaDemo(corpo.senha, l.senha_hash.replace(/\$[^$]*$/, '')) !== l.senha_hash.split('$')[5]) {
+      l.tentativas++;
+      if (l.tentativas >= 5) {
+        l.tentativas = 0;
+        l.bloqueado_ate = new Date(agora + 15 * 60_000).toISOString();
+        return [200, { situacao: 'bloqueado', ate: l.bloqueado_ate }];
+      }
+      return [200, { situacao: 'senha_errada', restantes: 5 - l.tentativas }];
+    }
+    l.tentativas = 0;
+  }
+  const arquivos = l.ids.map((id) => D.ARQUIVOS.find((a) => a.id === id)).filter(liberadoParaLink).sort(porCaptura);
+  l.ultimo_acesso_em = new Date(agora).toISOString();
+  if (corpo.acao === 'abrir') {
+    l.acessos++;
+    return [200, {
+      situacao: 'ok', titulo: l.titulo, mensagem: l.mensagem, expira_em: l.expira_em,
+      arquivos: arquivos.map((a) => ({
+        id: a.id, tipo: a.tipo, nome: a.nome_original, extensao: a.extensao, tamanho_bytes: a.tamanho_bytes,
+        largura: a.largura, altura: a.altura, duracao_seg: a.duracao_seg, legenda: a.legenda, autor: a.autor, capturado_em: a.capturado_em,
+        miniatura_url: a.tem_miniatura ? `${IMG}/${a.id}.svg` : null, previa_url: a.tipo === 'foto' ? `${IMG}/${a.id}.svg?tam=g` : null,
+      })),
+    }];
+  }
+  const a = arquivos.find((x) => x.id === String(corpo.arquivo_id ?? '').toLowerCase());
+  if (!a) return [200, { situacao: 'arquivo_fora' }];
+  l.downloads++;
+  return [200, { situacao: 'ok', url: `${BAIXAR}/arquivo/${a.id}` }];
+}
+
+// O "R2" dos downloads: o original (a imagem fictícia, com o nome de verdade) e o zip (montado de verdade).
+async function baixarFicticio(req, res) {
+  const [tipo, id, n] = new URL(req.url, 'http://demo').pathname.split('/').filter(Boolean);
+  if (tipo === 'arquivo') {
+    const a = D.ARQUIVOS.find((x) => x.id === id);
+    if (!a) { res.statusCode = 404; return res.end(); }
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', disposicao(a.nome_original));
+    return res.end(Buffer.from(svgFicticio(a, true)));
+  }
+  const z = tipo === 'zip' && ZIPS.find((x) => x.id === id);
+  const parte = z && z.partes.find((p) => p.n === Number(n));
+  if (!parte) { res.statusCode = 404; return res.end(); }
+  const arqs = parte.ids.map((x) => D.ARQUIVOS.find((a) => a.id === x));
+  const conteudo = new Map(arqs.map((a) => [a.id, Buffer.from(svgFicticio(a, true))]));
+  const nomes = nomesNoZip(arqs.map((a) => ({ nome: a.nome_original, evento: POR_EVENTO.get(a.evento_id).nome })));
+  const blocos = [];
+  await montarZip({
+    arquivos: arqs.map((a, i) => ({ chave: a.id, nomeNoZip: nomes[i], tamanho: conteudo.get(a.id).length, data: a.capturado_em })),
+    ler: async (c, ini, fim) => conteudo.get(c).subarray(ini, fim),
+    escrever: async (b) => { blocos.push(Buffer.from(b)); },
+  });
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', disposicao(nomeDoZip(z.titulo, parte.n, z.partes.length)));
+  return res.end(Buffer.concat(blocos));
+}
+
 // Rotas /api fictícias: 'MÉTODO /caminho' → (params, corpo) => [status, resposta]
 const ROTAS = {
   'GET /sessao': () => (estado.saiu ? SEM_SESSAO : [200, { ...D.PESSOA, perfil: estado.perfil }]),
@@ -312,6 +488,11 @@ const ROTAS = {
   },
   'GET /arquivos': (p) => {
     if (estado.saiu) return SEM_SESSAO;
+    const baixar = p.get('baixar');
+    if (baixar !== null) {
+      const a = ehUuid(baixar) ? listarArquivos(estado.perfil, { pagina: 1 }, baixar.toLowerCase())[0] : null;
+      return a ? [200, { url: `${BAIXAR}/arquivo/${a.id}`, nome: a.nome_original, tamanho_bytes: a.tamanho_bytes }] : [404, { erro: 'Arquivo não encontrado.', codigo: 'nao_encontrado' }];
+    }
     const id = p.get('id');
     if (id !== null) {
       const a = ehUuid(id) ? listarArquivos(estado.perfil, { pagina: 1 }, id.toLowerCase())[0] : null;
@@ -347,6 +528,45 @@ const ROTAS = {
     if (acao.permissao && !pode(estado.perfil, acao.permissao)) return [403, { erro: 'Seu perfil não permite isto.', codigo: 'sem_permissao' }];
     return acao.fazer(corpo);
   },
+  // Fase 4 (como api/zips.js, api/links.js e api/externo.js).
+  'GET /zips': (p) => {
+    if (estado.saiu) return SEM_SESSAO;
+    const baixar = p.get('baixar');
+    if (baixar !== null) {
+      const z = ZIPS.find((x) => x.id === baixar && x.perfil === estado.perfil);
+      if (!z) return [404, { erro: 'Zip não encontrado.', codigo: 'nao_encontrado' }];
+      const n = Number(p.get('parte') || 1);
+      const agora = zipNoMomento(z);
+      if (agora.situacao !== 'pronto' || !agora.partes.some((x) => x.n === n)) return [409, { erro: 'Este zip ainda não está pronto.', codigo: 'nao_pronto' }];
+      return [200, { url: `${BAIXAR}/zip/${z.id}/${n}` }];
+    }
+    return [200, { zips: ZIPS.filter((z) => z.perfil === estado.perfil).map((z) => zipParaTela(zipNoMomento(z), foraDe(z), relogio.agora())) }];
+  },
+  'POST /zips': (_p, corpo) => {
+    if (estado.saiu) return SEM_SESSAO;
+    if (corpo.acao !== 'pedir') return [400, { erro: 'Ação desconhecida.' }];
+    return pedirZipDemo(corpo);
+  },
+  'GET /links': () => {
+    if (estado.saiu) return SEM_SESSAO;
+    if (!pode(estado.perfil, 'compartilhar')) return [403, { erro: 'Seu perfil não cria links externos.', codigo: 'sem_permissao' }];
+    return [200, { links: LINKS.map(linkParaTelaDemo) }];
+  },
+  'POST /links': (_p, corpo) => {
+    if (estado.saiu) return SEM_SESSAO;
+    if (!pode(estado.perfil, 'compartilhar')) return [403, { erro: 'Seu perfil não cria links externos.', codigo: 'sem_permissao' }];
+    if (corpo.acao === 'criar') return criarLinkDemo(corpo);
+    if (corpo.acao === 'revogar') {
+      const l = LINKS.find((x) => x.id === String(corpo.id ?? '').toLowerCase());
+      if (!l) return [404, { erro: 'Link não encontrado.', codigo: 'nao_encontrado' }];
+      if (l.revogado_em) return [200, { ok: true, ja_estava: true }];
+      Object.assign(l, { revogado_em: new Date(relogio.agora()).toISOString(), revogado_por_nome: D.PESSOA.nome });
+      return [200, { ok: true }];
+    }
+    return [400, { erro: 'Ação desconhecida.' }];
+  },
+  // A página do link (visitante): sem sessão, vale o código.
+  'POST /externo': (_p, corpo) => externoDemo(corpo),
   'POST /__demo/perfil': (_p, corpo) => {
     if (!D.PERFIS.some((x) => x.codigo === corpo.perfil)) return [400, { erro: 'Perfil desconhecido.' }];
     estado.perfil = corpo.perfil;
@@ -384,13 +604,15 @@ function imagemFicticia(req, res) {
   const id = url.pathname.replace(/^\//, '').replace(/\.svg$/, '');
   const a = D.ARQUIVOS.find((x) => x.id === id);
   if (!a) { res.statusCode = 404; return res.end(); }
-  const grande = url.searchParams.get('tam') === 'g';
-  const [w, h] = grande ? [1200, 800] : [480, 360];
-  const cor = CORES[parseInt(id.slice(-2), 10) % CORES.length];
-  const rotulo = a.tipo === 'video' ? 'Vídeo fictício' : 'Imagem fictícia';
   res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
   res.setHeader('Cache-Control', 'no-store');
-  res.end(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+  res.end(svgFicticio(a, url.searchParams.get('tam') === 'g'));
+}
+function svgFicticio(a, grande) {
+  const [w, h] = grande ? [1200, 800] : [480, 360];
+  const cor = CORES[parseInt(a.id.slice(-2), 10) % CORES.length];
+  const rotulo = a.tipo === 'video' ? 'Vídeo fictício' : 'Imagem fictícia';
+  return (`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
 <rect width="100%" height="100%" fill="${cor}"/>
 <text x="50%" y="46%" text-anchor="middle" font-family="Nunito, Arial, sans-serif" font-size="${grande ? 44 : 26}" font-weight="700" fill="#ffffff">${escapar(a.legenda)}</text>
 <text x="50%" y="${grande ? '55%' : '58%'}" text-anchor="middle" font-family="Nunito, Arial, sans-serif" font-size="${grande ? 26 : 16}" fill="#ffffff">${rotulo} · ${escapar(a.nome_original)}</text>
@@ -447,6 +669,7 @@ export default function pluginDemo() {
         })().catch((e) => json(res, 500, { erro: String(e?.message || e) }));
       });
       server.middlewares.use(IMG, imagemFicticia);
+      server.middlewares.use(BAIXAR, (req, res) => { baixarFicticio(req, res).catch(() => { res.statusCode = 500; res.end(); }); });
       server.middlewares.use(R2_DEMO, (req, res) => { r2Ficticio(req, res).catch(() => { res.statusCode = 500; res.end(); }); });
       server.middlewares.use(PORTAL_DEMO, portalSimulado);
       server.httpServer?.once('listening', () => {

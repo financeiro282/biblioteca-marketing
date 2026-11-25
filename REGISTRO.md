@@ -5,11 +5,51 @@
 
 ## EM USO AGORA
 
-Lucas Cerda — desde 2026-11-25 11:37 — Fases 2 e 3 (envio e organização); testar a Fase 3 no ar
+Lucas Cerda — desde 2026-11-25 11:37 — Fase 4 (download, zip e links externos) — testar no ar
 
 <!-- Formato: Nome — desde AAAA-MM-DD HH:MM — o que vai fazer -->
 
 ## Histórico
+
+### 2026-11-25 — Lucas (com Claude) — FASE 4 (download, zip e links externos) — publicada (Lucas: "pode fazer o commit e push")
+- **Pedido do Lucas:** "segue pra fase 4".
+- **Depende de (nesta ordem):**
+  - SQL 02 — **FEITO em 25/11/2026**: revisado pelo Leo, rodado pelo Lucas, conferência 8/8 ok, fotografia e checagem iguais;
+  - regra `zips/` em 7 dias no Cloudflare — **FEITO em 25/11/2026** (Lucas);
+  - depois, o commit e o push.
+  - Passo a passo: `docs/PASSO-A-PASSO.md`, "Fase 4".
+- **Banco (`importek-sistemas/banco/biblioteca/02-download-e-links.sql` + `02-desfazer.sql`):** só acrescenta.
+  - 4 colunas e 8 funções. A rotina do zip roda sem sessão. O link externo é aberto pelo código. A senha é conferida no banco: 5 erros → 15 min.
+  - O direito de uso é conferido de novo no zip e a cada acesso ao link.
+  - PGlite **269/269** (188 + 81).
+  - Os arquivos do `importek-sistemas` (01 e 02, LEIA-ME, teste) **ainda não têm commit** naquele repositório.
+- **Servidor (8 de 12 funções):**
+  - `arquivos?baixar` (original com o nome que veio, 1 h);
+  - `api/zips.js` + `_zipador.js` + `_zip.js`:
+    - zip "guardado", sem ZIP64, em partes de até 2 GB; arquivo acima de 1 GB fica fora e baixa direto;
+    - 3 rotinas em paralelo, retomada pela página e pelo cron diário;
+    - aviso pelo Portal (`/api/notificar`); a velocidade vai para o log da Vercel;
+  - `api/links.js` (criar/revogar, endereço só uma vez) e `api/externo.js` (página pública), `_senha.js` (scrypt).
+  - Dependência nova: `@vercel/functions` (`waitUntil`), justificada no PLANO, **para o Lucas confirmar**.
+- **Telas:**
+  - **Ficha:** "Baixar original" e "Link externo".
+  - **Evento:**
+    - "Baixar todos (zip)".
+    - "Selecionar" agora vale para **todos os perfis**. Barra: Baixar (zip) para todos; Editar e Link externo para o Marketing; Lixeira para quem pode excluir.
+  - **Meus downloads:** atualiza a cada 4 s enquanto prepara.
+  - **Links externos:** acessos, downloads e revogar.
+  - **Página pública `/biblioteca/l#código`:** sem login, senha, prévia, Baixar por arquivo e "Baixar todos" (um de cada vez).
+- **Testes:**
+  - `npm test` **40/40**. O zip é aberto pelo `tar` do Windows no teste, e o `Expand-Archive` foi provado à parte: nomes com acento, repetidos e pastas por evento.
+  - `test:build` ok.
+  - Edge (CDP), no modo demonstração:
+    - zip pedido → pronto → baixado e aberto (25 arquivos);
+    - original baixado com o nome certo;
+    - link com senha (errada: "Restam 4"; certa: abre); "Baixar todos" público;
+    - Colaborador só com "Baixar (zip)" e fora de /links;
+    - 390 px sem rolagem; console sem erro.
+  - Corrigido no caminho: dois botões principais na janela "Link criado"; faltava a etiqueta "Vídeo" na página pública.
+- **Fica para depois:** zip pela página do link externo (se o Marketing pedir); apagar os zips de link vencido (Fase 5).
 
 ### 2026-11-25 — Lucas (com Claude) — FASE 3 (organização dos arquivos) — publicada (Lucas: "pode fazer o commit e push")
 - **Pedido do Lucas:** "fase 3 agora, deu certo tudo" (os testes do envio de verdade deram certo).
@@ -30,6 +70,8 @@ Lucas Cerda — desde 2026-11-25 11:37 — Fases 2 e 3 (envio e organização); 
   lixeira do evento, Colaborador só com "Favoritar" e sem "Selecionar", 390 px sem rolagem, console sem erro.
   - Corrigido no caminho: a etiqueta "Selecionar" saía preta sem texto (conflito de cores); "1 não foi aprovado: está".
 - **Restaurar da lixeira:** Fase 5 (Administrador).
+- **No ar (25/11, 13:58):** o Lucas testou pelo card ("deu certo"). Registros da Vercel da última hora: nenhum erro,
+  nenhum 5xx; 2 ações em arquivos gravadas (POST 200; o registro não diz quais). Faltam as outras do roteiro.
 
 ### 2026-11-25 — Lucas (com Claude) — FASE 2 (envio) pronta no modo demonstração — NÃO publicada
 - **O que mudou:**

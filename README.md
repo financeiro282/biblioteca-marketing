@@ -27,16 +27,18 @@ Plano, custos e decisões: `docs/PLANO.md`. Configuração: `docs/PASSO-A-PASSO.
 | `api/portal.js` | avisos do Portal (`portal-evento`) e conferência de acessos (`sincronizar-portal` e o cron diário) |
 | `api/eventos.js` · `api/arquivos.js` | consulta com busca e filtros (funções `buscar_eventos` e `buscar_arquivos` do banco, com o RLS de quem chama); criar e editar evento |
 | `api/envio.js` | envio (Fase 2): iniciar, assinar partes, concluir (confere o tamanho no R2), cancelar. O arquivo vai do navegador direto ao R2 |
-| `api/_r2.js` | links assinados do R2 (aws4fetch) e o envio em partes; sem `R2_*` configurado, devolve vazio |
+| `api/_r2.js` | links assinados do R2 (aws4fetch), o envio em partes e o download com o nome original; sem `R2_*` configurado, devolve vazio |
+| `api/zips.js` · `api/_zipador.js` · `api/_zip.js` | zip em segundo plano (Fase 4): pedir, "Meus downloads", a rotina que monta o zip (R2 → R2, partes de até 2 GB) e o aviso pelo Portal |
+| `api/links.js` · `api/externo.js` · `api/_senha.js` | link externo (Fase 4): o Marketing cria e revoga; a página pública (`/biblioteca/l#código`, sem login) abre e baixa; senha pelo scrypt, conferida no banco |
 | `src/envio/` | a fila de envio no navegador: SHA-256 (duplicados), prévias e dados (EXIF, vídeo), partes, retomada |
-| `compartilhado/` | regras usadas pela tela, pela API e pela demonstração: perfis, direito, formatos, busca, visibilidade |
+| `compartilhado/` | regras usadas pela tela, pela API e pela demonstração: perfis, direito, formatos, busca, visibilidade, download/zip/link |
 | `demo/` | modo demonstração (só no `npm run dev`; nunca vai para a Vercel) |
 | `src/` | telas (React + Vite + Tailwind, padrão visual v1.0.0 do Portal em `padrao-visual/`, cópia que não se edita) |
 | banco | `importek-sistemas/banco/biblioteca/` (área `biblioteca`, papel `app_biblioteca`, RLS pela sessão) |
 
 - **O navegador nunca fala com o banco** nem com o R2 com chave.
 - **Sem sessão válida, o banco não devolve nenhuma linha**, nem para o servidor.
-- **Funções da Vercel:** 5 de 12 (teto do Hobby). Rota nova: juntar numa existente sempre que der.
+- **Funções da Vercel:** 8 de 12 (teto do Hobby). Rota nova: juntar numa existente sempre que der.
 
 ## Variáveis (Vercel, só no servidor; só os nomes)
 

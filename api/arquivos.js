@@ -1,6 +1,8 @@
 // GET  /api/arquivos            → { arquivos: [...], total, pagina, por_pagina } com busca e filtros
 //                                 (?q ?tipo ?ano ?direito ?evento ?aprovadas=1 ?favoritos=1 ?pagina)
 // GET  /api/arquivos?id=<uuid>  → { arquivo } (404 se não existe ou a pessoa não pode ver); traz a `versao`
+// GET  /api/arquivos?baixar=<uuid> → { url, nome, tamanho_bytes }: link assinado do ORIGINAL, com o nome que veio
+//                                 (1 h para começar). Todos os perfis, só o que a pessoa vê; grava no log (Fase 4).
 // POST /api/arquivos            → organização (Fase 3, 25/11/2026):
 //   { acao: 'favoritar', id, favorito }                  → todos os perfis (cada um, os seus)
 //   { acao: 'alterar', id, versao, arquivo: {...} }       → legenda, autor, tags, direito (Marketing/Admin)
@@ -21,7 +23,7 @@ import { camposAlterados } from '../compartilhado/evento.js';
 import {
   erro, exigirJson, exigirPermissao, exigirSessao, lerCorpo, parametros, registrarAcao, responder, responderErro,
 } from './_comum.js';
-import { linkDaMiniatura, linkDaPrevia } from './_r2.js';
+import { linkDaMiniatura, linkDaPrevia, linkDeDownload } from './_r2.js';
 
 export async function arquivoParaTela(a) {
   return {
@@ -187,8 +189,24 @@ export default async function handler(req, res) {
       return responder(res, 200, await acao(req, corpo));
     }
     if (req.method !== 'GET') return responder(res, 405, { erro: 'Método não aceito.' });
-    const { sb } = await exigirSessao(req);
+    const { sb, eu } = await exigirSessao(req);
     const p = parametros(req);
+
+    const baixar = p.get('baixar');
+    if (baixar !== null) {
+      if (!ehUuid(baixar)) throw naoEncontrado();
+      // Pela mesma função da ficha (RLS + fora da lixeira + pronto); a chave do original vem da tabela (mesmo RLS).
+      const { data, error } = await sb.rpc('buscar_arquivos', { p_id: baixar.toLowerCase(), p_limite: 1 });
+      if (error) throw error;
+      if (!data?.[0]) throw naoEncontrado();
+      const { data: a, error: e2 } = await sb.from('arquivos').select('id, chave_original, nome_original, tamanho_bytes').eq('id', data[0].id).maybeSingle();
+      if (e2) throw e2;
+      if (!a) throw naoEncontrado();
+      const url = await linkDeDownload(a.chave_original, a.nome_original);
+      if (!url) throw erro(503, 'O armazenamento dos arquivos ainda não está configurado.', 'sem_r2');
+      await registrarAcao(sb, eu, 'arquivo.baixar', 'arquivo', a.id, { tamanho: Number(a.tamanho_bytes) || 0 });
+      return responder(res, 200, { url, nome: a.nome_original, tamanho_bytes: Number(a.tamanho_bytes) || 0 });
+    }
 
     const id = p.get('id');
     if (id !== null) {

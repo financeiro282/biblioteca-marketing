@@ -195,3 +195,91 @@ test('organização na demonstração: favoritos por perfil, editar com versão,
   assert.equal(responderDemo('POST', '/eventos', { acao: 'lixeira', id: novo.evento.id })[0], 200);
   assert.equal(responderDemo('GET', `/eventos?id=${novo.evento.id}`)[0], 404);
 });
+
+// ── Fase 4: download, zip e link externo ─────────────────────────────────────────────────────────────────
+import { relogio } from '../demo/plugin-demo.mjs';
+
+test('Fase 4: baixar original só do que o perfil vê; zip do evento com os grandes fora; cada um vê os seus zips', () => {
+  const T0 = Date.parse('2026-11-25T15:00:00Z');
+  const antes = relogio.agora;
+  relogio.agora = () => T0;
+  try {
+    como('colaborador');
+    const visivel = todosOsArquivos()[0];
+    let [s, r] = responderDemo('GET', `/arquivos?baixar=${visivel.id}`);
+    assert.equal(s, 200);
+    assert.match(r.url, /\/__demo\/baixar\/arquivo\//);
+    assert.equal(r.nome, visivel.nome_original);
+    const proibido = ARQUIVOS.find((a) => a.direito_uso === 'sem_autorizacao');
+    assert.equal(responderDemo('GET', `/arquivos?baixar=${proibido.id}`)[0], 404, 'Colaborador não baixa "Sem autorização"');
+    const ev = EVENTOS.find((e) => e.nome.startsWith('Feira'));
+    [s, r] = responderDemo('POST', '/zips', { acao: 'pedir', evento_id: ev.id });
+    assert.equal(s, 200);
+    const visiveisDoEvento = todosOsArquivos(`&evento=${ev.id}`);
+    assert.equal(r.zip.total_arquivos + r.fora.length, visiveisDoEvento.length, 'o zip leva só o que o Colaborador vê');
+    assert.ok(r.fora.length > 0 && r.fora.every((f) => f.tamanho_bytes > 1e9), 'vídeos acima de 1 GB ficam fora');
+    assert.equal(r.zip.situacao, 'gerando');
+    const id = r.zip.id;
+    assert.equal(responderDemo('GET', `/zips?baixar=${id}&parte=1`)[0], 409, 'antes de ficar pronto, não baixa');
+    relogio.agora = () => T0 + 60_000;
+    [s, r] = responderDemo('GET', '/zips');
+    const meu = r.zips.find((z) => z.id === id);
+    assert.equal(meu.situacao, 'pronto');
+    assert.ok(meu.expira_em && meu.fora.length > 0);
+    [s, r] = responderDemo('GET', `/zips?baixar=${id}&parte=1`);
+    assert.equal(s, 200);
+    assert.match(r.url, new RegExp(`/__demo/baixar/zip/${id}/1$`));
+    como('marketing');
+    assert.ok(!responderDemo('GET', '/zips')[1].zips.some((z) => z.id === id), 'outro perfil não vê o zip');
+    assert.equal(responderDemo('GET', `/zips?baixar=${id}&parte=1`)[0], 404);
+    como('colaborador');
+    const seis = todosOsArquivos().filter((a) => a.tamanho_bytes < 1e8).slice(0, 2).map((a) => a.id);
+    relogio.agora = () => T0 + 120_000;
+    for (let i = 0; i < 3; i++) assert.equal(responderDemo('POST', '/zips', { acao: 'pedir', ids: seis })[0], 200);
+    assert.equal(responderDemo('POST', '/zips', { acao: 'pedir', ids: seis })[0], 429, 'no máximo 3 zips sendo preparados por pessoa');
+    assert.equal(responderDemo('POST', '/zips', { acao: 'pedir', ids: [] })[0], 400);
+  } finally {
+    relogio.agora = antes;
+  }
+});
+
+test('Fase 4: link externo — só quem compartilha cria; só "liberado" entra; senha (5 erros bloqueiam); revogar', () => {
+  como('colaborador');
+  assert.equal(responderDemo('GET', '/links')[0], 403);
+  assert.equal(responderDemo('POST', '/links', { acao: 'criar' })[0], 403);
+  como('marketing');
+  const evLib = EVENTOS.find((e) => e.direito_uso === 'liberado');
+  const doEvento = ARQUIVOS.filter((a) => a.evento_id === evLib.id);
+  const liberados = doEvento.filter((a) => a.direito_uso === 'liberado').slice(0, 2);
+  const naoLiberado = doEvento.find((a) => a.direito_uso !== 'liberado');
+  let [s, r] = responderDemo('POST', '/links', { acao: 'criar', titulo: 'Imprensa', dias: 7, ids: [...liberados.map((a) => a.id), naoLiberado.id] });
+  assert.equal(s, 200, JSON.stringify(r));
+  assert.equal(r.incluidos, 2);
+  assert.equal(r.recusados, 1, 'o que não é "Uso liberado" fica fora');
+  const codigo = r.endereco.split('#')[1];
+  assert.match(codigo, /^[A-Za-z0-9_-]{43}$/);
+  [s, r] = responderDemo('POST', '/externo', { acao: 'abrir', codigo });
+  assert.equal(r.situacao, 'ok');
+  assert.deepEqual(r.arquivos.map((a) => a.id).sort(), liberados.map((a) => a.id).sort());
+  [s, r] = responderDemo('POST', '/externo', { acao: 'baixar', codigo, arquivo_id: naoLiberado.id });
+  assert.equal(r.situacao, 'arquivo_fora');
+  assert.equal(responderDemo('POST', '/externo', { acao: 'abrir', codigo: 'x'.repeat(43) })[0], 404);
+  assert.equal(responderDemo('POST', '/links', { acao: 'criar', titulo: 'x', dias: 7, ids: [naoLiberado.id] })[0], 400, 'nenhum liberado: não cria');
+  // Com senha
+  [s, r] = responderDemo('POST', '/links', { acao: 'criar', titulo: 'Agência', dias: 1, senha: 'senha certa', ids: [liberados[0].id] });
+  const comSenha = r.endereco.split('#')[1];
+  assert.equal(responderDemo('POST', '/externo', { acao: 'abrir', codigo: comSenha })[1].situacao, 'senha');
+  assert.deepEqual(responderDemo('POST', '/externo', { acao: 'abrir', codigo: comSenha, senha: 'errada' })[1], { situacao: 'senha_errada', restantes: 4 });
+  assert.equal(responderDemo('POST', '/externo', { acao: 'abrir', codigo: comSenha, senha: 'senha certa' })[1].situacao, 'ok');
+  for (let i = 0; i < 4; i++) responderDemo('POST', '/externo', { acao: 'abrir', codigo: comSenha, senha: `errada ${i}` });
+  assert.equal(responderDemo('POST', '/externo', { acao: 'abrir', codigo: comSenha, senha: 'errada 5' })[1].situacao, 'bloqueado');
+  assert.equal(responderDemo('POST', '/externo', { acao: 'abrir', codigo: comSenha, senha: 'senha certa' })[1].situacao, 'bloqueado');
+  // Lista e revogar
+  const lista = responderDemo('GET', '/links')[1].links;
+  const l = lista.find((x) => x.titulo === 'Imprensa');
+  assert.equal(l.situacao, 'ativo');
+  assert.ok(l.acessos >= 1 && l.arquivos === 2 && l.com_senha === false);
+  assert.equal(responderDemo('POST', '/links', { acao: 'revogar', id: l.id })[0], 200);
+  assert.equal(responderDemo('POST', '/externo', { acao: 'abrir', codigo })[1].situacao, 'revogado');
+  assert.equal(responderDemo('GET', '/links')[1].links.find((x) => x.id === l.id).situacao, 'revogado');
+});

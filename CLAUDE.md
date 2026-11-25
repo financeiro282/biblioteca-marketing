@@ -22,6 +22,9 @@ Vale também o `CLAUDE.md` da pasta de cima (`Projetos de IA`): leia-o antes. Le
   - Função nova: `revoke execute ... from public, anon, authenticated`.
   - E o teste PGlite (`importek-sistemas/scripts/testa-banco-biblioteca.mjs`) tem de passar.
 - **Lixeira:** só pelas funções `*_para_lixeira` / `*_restaurar`. O UPDATE comum é recusado pelo Postgres, porque a linha some da leitura de quem altera.
+- **Funções SEM sessão (SQL 02, Fase 4):** a rotina do zip (`zip_*`) e o link externo (`link_abrir`, `link_baixar`).
+  Elas conferem TUDO por dentro (direito de cada arquivo, validade, senha). Regra nova de quem vê o quê → muda
+  também nelas, e o teste PGlite (seções 10c e 10d) tem de passar.
 - **Regra que existe em dois lugares:** quem vê o quê está nas políticas do banco **e** em `compartilhado/visibilidade.js` (só para a demonstração e a tela). Mudou num, muda no outro.
 
 ## Arquivos (R2)
@@ -29,6 +32,11 @@ Vale também o `CLAUDE.md` da pasta de cima (`Projetos de IA`): leia-o antes. Le
 - **Envio:** do navegador direto ao R2, em partes (link assinado por parte). O arquivo **nunca** passa pela Vercel (limite de 4,5 MB).
 - **Chaves no R2:** `originais/<ano>/<id>.<ext>`, `miniaturas/…`, `previas/…`, `zips/…`. Nunca o nome do usuário.
 - **Original:** sempre preservado, sem compressão.
+- **Zips (Fase 4):** `zips/<id>/parte-<n>.zip`, montados pelo servidor (`api/_zipador.js`), partes de até 2 GB,
+  apagados pelo próprio R2 em 7 dias (regra do bucket). Arquivo acima de 1 GB não entra no zip.
+- **Link externo (Fase 4):** o código vai **só no `#` do endereço** (`/biblioteca/l#código`). Nunca em parâmetro
+  de URL, log ou banco (lá, só o sha256). A senha nunca vai ao banco nem ao log: só o hash scrypt e a "prova"
+  (`api/_senha.js`). A página `/l` fica FORA da parte protegida do app (sem sessão, sem menu).
 
 ## Endereço único
 - **Onde mora:** o site em `/biblioteca/` (Vite `base`, `BrowserRouter basename`) e a API em `/biblioteca/api` (o cookie só vai para ela).

@@ -12,6 +12,7 @@
 // Sem R2 configurado (Fase 1, demonstração), os links saem null e a tela mostra o quadro neutro.
 
 import { AwsClient } from 'aws4fetch';
+import { disposicao, VALIDADE_DOWNLOAD_SEG } from '../compartilhado/download.js';
 
 let cache = null;
 function conf() {
@@ -141,4 +142,39 @@ export async function tamanhoDoObjeto(chave) {
     if (e?.statusR2 === 404) return null;
     throw e;
   }
+}
+
+// ── Fase 4: download e zip ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Link assinado de DOWNLOAD: o R2 devolve o arquivo com o nome escolhido (Content-Disposition).
+ * Vale 1 h para começar (depois de começar, o download vai até o fim).
+ */
+export const linkDeDownload = (chave, nome, validadeSeg = VALIDADE_DOWNLOAD_SEG) =>
+  linkAssinado(chave, { validadeSeg, janelaSeg: 1, consulta: { 'response-content-disposition': disposicao(nome) } });
+
+/** Os bytes [inicio, fim) de um objeto (GET com Range). Confere o tamanho que chegou. */
+export async function lerPedaco(chave, inicio, fim) {
+  const resp = await r2('GET', chave, { cabecalhos: { Range: `bytes=${inicio}-${fim - 1}` } });
+  const buf = new Uint8Array(await resp.arrayBuffer());
+  if (buf.byteLength !== fim - inicio) {
+    throw Object.assign(new Error(`R2 devolveu ${buf.byteLength} bytes em vez de ${fim - inicio}.`), { r2: 'tamanho' });
+  }
+  return buf;
+}
+
+/** Uma parte de um envio em partes feito PELO SERVIDOR (o zip). Devolve o ETag. */
+export async function enviarParteDoServidor(chave, uploadId, numero, corpo) {
+  const resp = await r2('PUT', chave, {
+    consulta: { partNumber: numero, uploadId }, corpo,
+    cabecalhos: { 'X-Amz-Content-Sha256': 'UNSIGNED-PAYLOAD' },   // o R2 confere o tamanho; poupa um SHA-256 de 16 MiB
+  });
+  const etag = resp.headers.get('etag');
+  if (!etag) throw new Error('R2 não devolveu o ETag da parte.');
+  return etag;
+}
+
+/** Apaga um objeto (o que já não existe: ok). */
+export async function apagarObjeto(chave) {
+  try { await r2('DELETE', chave); } catch (e) { if (e?.statusR2 !== 404) throw e; }
 }

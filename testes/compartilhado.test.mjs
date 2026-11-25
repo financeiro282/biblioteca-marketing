@@ -164,3 +164,80 @@ test('arquivo: edição (legenda, autor, tags, direito), lote só com o pedido, 
   assert.equal(A.podeAprovar('sem_autorizacao'), false);
   assert.ok(A.podeAprovar('interno') && A.podeAprovar('liberado'));
 });
+
+// ── Fase 4: zip, download e link externo (compartilhado/download.js) ──────────────────────────────────────
+import * as dl from '../compartilhado/download.js';
+
+test('zip: partes de até 2 GB, arquivos acima de 1 GB ficam fora (baixam direto), na ordem', () => {
+  const GB = 1_000_000_000;
+  const arqs = [
+    { id: 'a', tamanho_bytes: 0.9 * GB }, { id: 'b', tamanho_bytes: 0.9 * GB }, { id: 'video', tamanho_bytes: 3 * GB },
+    { id: 'c', tamanho_bytes: 0.5 * GB }, { id: 'd', tamanho_bytes: 10 },
+  ];
+  const p = dl.planoDoZip(arqs);
+  assert.deepEqual(p.fora, ['video']);
+  assert.deepEqual(p.partes.map((x) => x.ids), [['a', 'b'], ['c', 'd']]);
+  assert.deepEqual(p.partes.map((x) => [x.n, x.situacao, x.tentativas]), [[1, 'na_fila', 0], [2, 'na_fila', 0]]);
+  assert.ok(p.partes.every((x) => x.bytes <= dl.LIMITE_PARTE_ZIP));
+  const muitos = dl.planoDoZip(Array.from({ length: 4500 }, (_, i) => ({ id: `f${i}`, tamanho_bytes: 1000 })));
+  assert.deepEqual(muitos.partes.map((x) => x.ids.length), [2000, 2000, 500], 'até 2000 arquivos por parte');
+  assert.deepEqual(dl.planoDoZip([{ id: 'v', tamanho_bytes: 5 * GB }]), { partes: [], fora: ['v'] }, 'só vídeo grande: nenhuma parte');
+});
+
+test('nomes no zip e no download: seguros no Windows, pasta por evento quando há vários, repetidos com (2)', () => {
+  assert.equal(dl.nomeSeguro('a/b\\c:d*e?f"g<h>i|j.jpg'), 'a_b_c_d_e_f_g_h_i_j.jpg');
+  assert.equal(dl.nomeSeguro('  ..oculto.  '), 'oculto');
+  assert.equal(dl.nomeSeguro('CON.txt'), '_CON.txt');
+  assert.equal(dl.nomeSeguro(''), 'arquivo');
+  const longo = dl.nomeSeguro(`${'x'.repeat(300)}.jpeg`);
+  assert.equal(longo.length, 150);
+  assert.ok(longo.endsWith('.jpeg'));
+  assert.deepEqual(dl.nomesNoZip([
+    { nome: 'IMG_1.JPG', evento: 'Feira' }, { nome: 'img_1.jpg', evento: 'Feira' }, { nome: 'IMG_1.JPG', evento: 'Congresso: SP' },
+  ]), ['Feira/IMG_1.JPG', 'Feira/img_1 (2).jpg', 'Congresso_ SP/IMG_1.JPG']);
+  assert.equal(dl.nomeDoZip('Feira 2026', 1, 1), 'Feira 2026.zip');
+  assert.equal(dl.nomeDoZip('Feira/2026', 2, 3), 'Feira_2026 - parte 2 de 3.zip');
+  assert.equal(dl.disposicao("Foto d'água (1).jpg"), "attachment;filename*=UTF-8''Foto%20d%27%C3%A1gua%20%281%29.jpg");
+  assert.equal(dl.chaveDoZip('abc', 2), 'zips/abc/parte-2.zip');
+});
+
+test('pedido de zip: evento inteiro ou seleção de 1 a 5000; situação e rotina parada', () => {
+  const id = '11111111-2222-4333-8444-555555555555';
+  assert.deepEqual(dl.lerPedidoZip({ evento_id: id.toUpperCase() }), { evento_id: id });
+  assert.ok(dl.lerPedidoZip({ evento_id: 'x' }).erro);
+  assert.deepEqual(dl.lerPedidoZip({ ids: [id, id] }), { ids: [id] });
+  assert.ok(dl.lerPedidoZip({ ids: [] }).erro);
+  assert.ok(dl.lerPedidoZip({ ids: ['x'] }).erro);
+  const agora = Date.parse('2026-11-25T12:00:00Z');
+  assert.equal(dl.situacaoDoZip({ situacao: 'pronto', expira_em: '2026-11-25T11:00:00Z' }, agora), 'expirado');
+  assert.equal(dl.situacaoDoZip({ situacao: 'pronto', expira_em: '2026-12-01T11:00:00Z' }, agora), 'pronto');
+  const ativa = { situacao: 'gerando', partes: [{ situacao: 'gerando', ate: '2026-11-25T12:04:00Z' }, { situacao: 'na_fila' }] };
+  assert.equal(dl.zipPrecisaDeRotina(ativa, agora), false, 'rotina trabalhando: não chama outra');
+  const caiu = { situacao: 'gerando', partes: [{ situacao: 'gerando', ate: '2026-11-25T11:59:00Z' }, { situacao: 'pronto' }] };
+  assert.equal(dl.zipPrecisaDeRotina(caiu, agora), true, 'trava vencida: a rotina caiu, chama outra');
+  assert.equal(dl.zipPrecisaDeRotina({ situacao: 'na_fila', partes: [{ situacao: 'na_fila' }] }, agora), true);
+  assert.equal(dl.zipPrecisaDeRotina({ situacao: 'pronto', partes: [{ situacao: 'pronto' }] }, agora), false);
+  const tela = dl.zipParaTela({
+    id: 'z', titulo: 'Feira', situacao: 'pronto', total_bytes: 2048, arquivo_ids: ['a', 'b', 'v'], expira_em: '2026-12-01T00:00:00Z',
+    partes: [{ n: 1, ids: ['a', 'b'], bytes: 2000, bytes_zip: 2048, arquivos: 2, situacao: 'pronto' }],
+  }, new Map([['v', { id: 'v', nome_original: 'video.mp4', tamanho_bytes: 5e9 }]]), agora);
+  assert.deepEqual(tela.partes, [{ n: 1, situacao: 'pronto', bytes: 2048, arquivos: 2 }]);
+  assert.equal(tela.total_arquivos, 2);
+  assert.deepEqual(tela.fora.map((f) => f.id), ['v'], 'o vídeo grande aparece para baixar direto');
+});
+
+test('link externo: título, validade de 1 a 90 dias, senha de 6 a 100, 1 a 1000 arquivos; situação', () => {
+  const id = '11111111-2222-4333-8444-555555555555';
+  const ok = dl.lerLink({ titulo: '  Feira 2026 ', destinatario: 'Agência X', mensagem: '', dias: 7, senha: '', ids: [id] });
+  assert.deepEqual(ok.valores, { titulo: 'Feira 2026', destinatario: 'Agência X', mensagem: null, dias: 7, senha: null, ids: [id] });
+  const ruim = dl.lerLink({ titulo: '', dias: 91, senha: '123', ids: [] });
+  assert.deepEqual(Object.keys(ruim.erros).sort(), ['dias', 'ids', 'senha', 'titulo']);
+  assert.ok(dl.lerLink({ titulo: 'x', dias: 1.5, ids: [id] }).erros.dias);
+  assert.equal(dl.lerLink({ titulo: 'x', dias: 90, senha: 'segredo', ids: [id] }).valores.senha, 'segredo');
+  assert.ok(dl.formatoDoCodigo('A'.repeat(43)));
+  assert.ok(!dl.formatoDoCodigo('A'.repeat(42)));
+  const agora = Date.parse('2026-11-25T12:00:00Z');
+  assert.equal(dl.situacaoDoLink({ expira_em: '2026-12-01T00:00:00Z' }, agora), 'ativo');
+  assert.equal(dl.situacaoDoLink({ expira_em: '2026-11-20T00:00:00Z' }, agora), 'expirado');
+  assert.equal(dl.situacaoDoLink({ expira_em: '2026-12-01T00:00:00Z', revogado_em: '2026-11-24T00:00:00Z' }, agora), 'revogado');
+});
