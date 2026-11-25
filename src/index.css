@@ -1,0 +1,16 @@
+/* Padrão visual Importek v1 — tokens da cópia em padrao-visual/ (feita pelo script do Portal;
+   não editar). As telas usam só os nomes do preset do Tailwind: nada de cor solta.
+   ⚠️ O @import tem de vir antes das diretivas @tailwind. */
+@import '../padrao-visual/tokens.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { -webkit-font-smoothing: antialiased; }
+  body { @apply bg-fundo font-sans text-texto; }
+  :focus-visible { outline: 2px solid var(--cor-titulo); outline-offset: 2px; }
+  details > summary { list-style: none; }
+  details > summary::-webkit-details-marker { display: none; }
+}

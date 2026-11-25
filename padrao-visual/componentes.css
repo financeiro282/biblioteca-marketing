@@ -1,0 +1,229 @@
+/* ── Padrão visual Importek · v1 · COMPONENTES ───────────────────────────────────────
+   Fonte oficial: portal-importek/padrao-visual/v1/. Documentação: PADRAO.md.
+   ⚠️ Cópia num projeto não se edita (ver tokens.css).
+
+   Classes com prefixo `pi-` para funcionar em qualquer sistema (React, HTML puro, HTML
+   gerado por Python) sem depender de Tailwind e sem colidir com o CSS que já existe.
+   Os valores são os mesmos das peças do portal (src/componentes/ui.tsx e Layout.tsx):
+   onde está escrito "= BOTAO.principal", é aquela classe do portal traduzida.
+
+   ⚠️ NENHUMA REGRA GLOBAL (nada em `body`, `button`, `input`...). Tudo depende da classe.
+      É de propósito: em vários sistemas a mesma página carrega telas do CLIENTE (proposta,
+      pesquisa pública), que ficam fora da padronização e não podem mudar por tabela.
+      Para ligar a base (fonte, cor, fundo, foco) numa área, use a classe `pi` nela. */
+
+/* ── Base ──────────────────────────────────────────────────────────────────────── */
+.pi {
+  font-family: var(--fonte-padrao);
+  color: var(--cor-texto);
+  background: var(--cor-fundo);
+  -webkit-font-smoothing: antialiased;
+}
+.pi :focus-visible { outline: 2px solid var(--cor-titulo); outline-offset: 2px; }
+.pi-secundario { color: var(--cor-secundario); }
+.pi-num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ── Botões (= BOTAO.*) ───────────────────────────────────────────────────────────
+   Uma ação principal por tela. As demais em contorno ou texto. Perigo só dentro da
+   janela de confirmação. Sem ícone decorativo, sem crescer ao passar o mouse. */
+.pi-botao-principal,
+.pi-botao-contorno,
+.pi-botao-perigo {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  box-sizing: border-box; height: 40px; margin: 0; padding: 0 16px;
+  border: 1px solid transparent; border-radius: var(--raio);
+  font: inherit; font-family: var(--fonte-padrao); font-size: 0.875rem; line-height: 1.25rem; font-weight: 600;
+  text-decoration: none; white-space: nowrap; cursor: pointer;
+}
+.pi-botao-principal { border-color: var(--cor-marca); background: var(--cor-marca); color: var(--cor-sobre-marca); }
+.pi-botao-principal:hover { border-color: var(--cor-marca-hover); background: var(--cor-marca-hover); }
+.pi-botao-contorno { border-color: var(--cor-borda-campo); background: var(--cor-superficie); color: var(--cor-titulo); }
+.pi-botao-contorno:hover { border-color: var(--cor-titulo); }
+.pi-botao-perigo { border-color: var(--cor-erro-texto); background: var(--cor-superficie); color: var(--cor-erro-texto); }
+.pi-botao-perigo:hover { background: var(--cor-zebra); }
+.pi-botao-texto {
+  display: inline-flex; align-items: center; margin: 0; padding: 0; border: 0; background: none;
+  font: inherit; font-family: var(--fonte-padrao); font-size: 0.875rem; line-height: 1.25rem; font-weight: 600;
+  color: var(--cor-titulo); text-decoration: none; text-underline-offset: 2px; white-space: nowrap; cursor: pointer;
+}
+.pi-botao-texto:hover { text-decoration: underline; }
+.pi-botao-principal:disabled, .pi-botao-principal[aria-disabled="true"] {
+  cursor: not-allowed; border-color: var(--cor-borda); background: var(--cor-borda); color: var(--cor-apagado);
+}
+.pi-botao-contorno:disabled, .pi-botao-contorno[aria-disabled="true"],
+.pi-botao-perigo:disabled, .pi-botao-perigo[aria-disabled="true"] {
+  cursor: not-allowed; border-color: var(--cor-borda); background: var(--cor-superficie); color: var(--cor-apagado);
+}
+.pi-botao-texto:disabled, .pi-botao-texto[aria-disabled="true"] { cursor: not-allowed; color: var(--cor-apagado); text-decoration: none; }
+
+/* ── Campos (= CAMPO e <Campo>) ───────────────────────────────────────────────────
+   Texto de 16px: menor que isso o celular dá zoom ao tocar. Rótulo acima; erro (ou uma
+   linha de orientação) abaixo. */
+.pi-grupo { display: flex; flex-direction: column; gap: 6px; }
+.pi-rotulo { display: block; font-size: 0.875rem; line-height: 1.25rem; font-weight: 600; color: var(--cor-titulo); }
+.pi-campo {
+  box-sizing: border-box; width: 100%; height: 40px; margin: 0; padding: 0 12px;
+  border: 1px solid var(--cor-borda-campo); border-radius: var(--raio); background: var(--cor-superficie);
+  font: inherit; font-family: var(--fonte-padrao); font-size: 1rem; line-height: 1.5rem; color: var(--cor-titulo);
+}
+textarea.pi-campo { height: auto; min-height: 80px; padding: 8px 12px; resize: vertical; }
+.pi-campo::placeholder { color: var(--cor-apagado); opacity: 1; }
+.pi-campo:focus { border-color: var(--cor-titulo); outline: none; }
+.pi-campo:disabled { background: var(--cor-zebra); }
+.pi-campo-erro { margin: 0; font-size: 0.875rem; line-height: 1.25rem; color: var(--cor-erro-texto); }
+.pi-campo-ajuda { margin: 0; font-size: 0.75rem; line-height: 1rem; color: var(--cor-secundario); }
+
+/* ── Tabelas (= TABELA) ───────────────────────────────────────────────────────────
+   Cabeçalho em caixa alta discreta, separador de 1px, número à direita (.pi-num). No
+   celular, esconda colunas secundárias (.pi-so-largo) em vez de rolar para o lado. */
+.pi-tabela-caixa { overflow: hidden; border: 1px solid var(--cor-borda); border-radius: var(--raio-grande); background: var(--cor-superficie); }
+.pi-tabela { width: 100%; border-collapse: collapse; font-size: 0.875rem; line-height: 1.25rem; }
+.pi-tabela th {
+  padding: 10px 12px; border-bottom: 1px solid var(--cor-borda-forte); text-align: left;
+  font-size: 0.75rem; line-height: 1rem; font-weight: 600; letter-spacing: 0.025em; text-transform: uppercase; color: var(--cor-secundario);
+}
+.pi-tabela td { padding: 12px; border-bottom: 1px solid var(--cor-borda); vertical-align: middle; color: var(--cor-texto); }
+.pi-tabela th.pi-num, .pi-tabela td.pi-num { text-align: right; }
+@media (min-width: 640px) { .pi-tabela th, .pi-tabela td { padding-left: 16px; padding-right: 16px; } }
+.pi-so-largo { display: none; }
+@media (min-width: 640px) { .pi-so-largo { display: table-cell; } }
+
+/* ── Cartão (= <Cartao>) ─────────────────────────────────────────────────────────── */
+.pi-cartao { box-sizing: border-box; padding: 20px; border: 1px solid var(--cor-borda); border-radius: var(--raio-grande); background: var(--cor-superficie); }
+@media (min-width: 768px) { .pi-cartao { padding: 24px; } }
+.pi-cartao-titulo { margin: 0 0 16px; font-size: 1rem; line-height: 1.5rem; font-weight: 700; color: var(--cor-titulo); }
+
+/* ── Situação (= <Status>): bolinha + palavra curta, nunca selo colorido ─────────── */
+.pi-status { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 0.875rem; line-height: 1.25rem; color: var(--cor-texto); }
+.pi-status::before { content: ''; flex-shrink: 0; width: 8px; height: 8px; border-radius: 9999px; background: var(--cor-apagado); }
+.pi-status-sucesso::before { background: var(--cor-sucesso); }
+.pi-status-alerta::before { background: var(--cor-alerta); }
+.pi-status-erro::before { background: var(--cor-erro); }
+
+/* ── Aviso (= <Aviso>): texto, sem ícone, faixa à esquerda na cor do tom ─────────────
+   Use role="status" no neutro e role="alert" no alerta e no erro. */
+.pi-aviso {
+  box-sizing: border-box; padding: 12px 16px; border: 1px solid var(--cor-borda); border-left: 2px solid var(--cor-borda-campo);
+  border-radius: var(--raio); background: var(--cor-superficie); font-size: 0.875rem; line-height: 1.625; color: var(--cor-texto);
+}
+.pi-aviso-alerta { border-left-color: var(--cor-alerta); }
+.pi-aviso-erro { border-left-color: var(--cor-erro); }
+
+/* ── Aviso flutuante (= Toaster do portal): neutro, no alto e no centro, sem cor por tipo ── */
+.pi-aviso-flutuante {
+  position: fixed; top: 16px; left: 50%; z-index: 60; transform: translateX(-50%);
+  box-sizing: border-box; max-width: calc(100vw - 32px); padding: 12px 16px;
+  border: 1px solid var(--cor-borda-forte); border-radius: var(--raio); background: var(--cor-superficie);
+  font-family: var(--fonte-padrao); font-size: 0.875rem; line-height: 1.25rem; color: var(--cor-titulo);
+}
+
+/* ── Carregando e vazio (= <Carregando>) ─────────────────────────────────────────────
+   O vazio diz o que não há e, se houver, o que fazer. Sem ilustração. */
+.pi-carregando, .pi-vazio { margin: 0; padding: 40px 16px; text-align: center; font-size: 0.875rem; line-height: 1.25rem; color: var(--cor-secundario); }
+
+/* ── Abas (v1): texto, o ativo com traço amarelo embaixo ─────────────────────────────
+   Quebram linha no celular em vez de rolar para o lado. Ativa: aria-selected="true". */
+.pi-abas { display: flex; flex-wrap: wrap; gap: 4px 24px; margin: 0 0 24px; padding: 0; border-bottom: 1px solid var(--cor-borda); }
+.pi-aba {
+  margin: 0 0 -1px; padding: 10px 0; border: 0; border-bottom: 2px solid transparent; background: none;
+  font: inherit; font-family: var(--fonte-padrao); font-size: 0.875rem; line-height: 1.25rem; color: var(--cor-texto); cursor: pointer; text-decoration: none;
+}
+.pi-aba:hover { color: var(--cor-titulo); }
+.pi-aba[aria-selected="true"], .pi-aba.ativa { border-bottom-color: var(--cor-marca); font-weight: 600; color: var(--cor-titulo); }
+
+/* ── Filtros (v1): campos lado a lado e opções de escolha única ──────────────────────
+   Opção escolhida: aria-pressed="true" — fundo leve e peso maior; o amarelo fica para a
+   ação principal. */
+.pi-filtros { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.pi-opcoes { display: inline-flex; flex-wrap: wrap; overflow: hidden; border: 1px solid var(--cor-borda-campo); border-radius: var(--raio); background: var(--cor-superficie); }
+.pi-opcao {
+  box-sizing: border-box; height: 38px; margin: 0; padding: 0 12px; border: 0; border-left: 1px solid var(--cor-borda); background: none;
+  font: inherit; font-family: var(--fonte-padrao); font-size: 0.875rem; line-height: 1.25rem; color: var(--cor-texto); cursor: pointer; white-space: nowrap;
+}
+.pi-opcao:first-child { border-left: 0; }
+.pi-opcao:hover { color: var(--cor-titulo); }
+.pi-opcao[aria-pressed="true"], .pi-opcao.escolhida { background: var(--cor-zebra); font-weight: 700; color: var(--cor-titulo); }
+
+/* ── Janela (= <Janela>): fecha no Esc e no fundo; rodapé fixo para Cancelar/Salvar ── */
+.pi-veu {
+  position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-end; justify-content: center; background: var(--cor-veu);
+}
+/* O atributo `hidden` perderia para o display acima: fechado é fechado. */
+.pi-veu[hidden], .pi-aviso-flutuante[hidden] { display: none; }
+.pi-janela {
+  box-sizing: border-box; display: flex; flex-direction: column; width: 100%; max-width: 32rem; max-height: 92vh; overflow: hidden;
+  border: 1px solid var(--cor-borda); border-radius: var(--raio-grande) var(--raio-grande) 0 0; background: var(--cor-superficie);
+  box-shadow: var(--sombra-janela); font-family: var(--fonte-padrao); color: var(--cor-texto);
+}
+@media (min-width: 640px) {
+  .pi-veu { align-items: center; padding: 16px; }
+  .pi-janela { border-radius: var(--raio-grande); }
+}
+.pi-janela-cabecalho { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 20px; border-bottom: 1px solid var(--cor-borda); }
+.pi-janela-titulo { margin: 0; font-size: 1rem; line-height: 1.5rem; font-weight: 700; color: var(--cor-titulo); }
+.pi-janela-corpo { overflow-y: auto; padding: 20px; }
+.pi-janela-rodape { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; padding: 14px 20px; border-top: 1px solid var(--cor-borda); }
+
+/* ── MOLDURA DOS SISTEMAS (= Layout.tsx do portal) ───────────────────────────────────
+   Barra lateral fixa de 240px, só com texto: logo e nome do sistema no alto; a navegação;
+   embaixo, a pessoa, "Voltar ao portal" e "Sair". No celular (< 1024px) a barra vira um
+   menu que abre por cima, pelo botão "Menu" da barra do topo (.aberta na .pi-lateral).
+   Estrutura em PADRAO.md; moldura.js liga o menu nos sistemas sem React. */
+.pi-moldura { min-height: 100vh; background: var(--cor-fundo); font-family: var(--fonte-padrao); color: var(--cor-texto); -webkit-font-smoothing: antialiased; }
+.pi-moldura :focus-visible { outline: 2px solid var(--cor-titulo); outline-offset: 2px; }
+.pi-barra-celular {
+  position: sticky; top: 0; z-index: 30; display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; border-bottom: 1px solid var(--cor-borda); background: var(--cor-superficie);
+}
+.pi-veu-menu { position: fixed; inset: 0; z-index: 40; display: none; background: var(--cor-veu); }
+.pi-veu-menu.aberto { display: block; }
+.pi-lateral {
+  position: fixed; top: 0; bottom: 0; left: 0; z-index: 50; box-sizing: border-box;
+  display: flex; flex-direction: column; width: var(--largura-lateral);
+  border-right: 1px solid var(--cor-borda); background: var(--cor-superficie); transform: translateX(-100%);
+}
+.pi-lateral.aberta { transform: translateX(0); }
+.pi-lateral-topo { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; height: 64px; padding: 0 20px; }
+.pi-logo { display: inline-flex; }
+.pi-logo img { display: block; width: auto; height: 28px; }
+.pi-nome-sistema { flex-shrink: 0; margin: -8px 0 0; padding: 0 20px 12px; font-size: 0.875rem; line-height: 1.25rem; font-weight: 700; color: var(--cor-titulo); }
+.pi-nav { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; padding-top: 8px; }
+.pi-nav-grupo { margin: 0; padding: 16px 20px 4px; font-size: 0.75rem; line-height: 1rem; font-weight: 600; letter-spacing: 0.025em; text-transform: uppercase; color: var(--cor-secundario); }
+.pi-nav-item {
+  display: block; box-sizing: border-box; width: 100%; margin: 0; padding: 8px 20px;
+  border: 0; border-left: 2px solid transparent; background: none; text-align: left; text-decoration: none; cursor: pointer;
+  font: inherit; font-family: var(--fonte-padrao); font-size: 0.875rem; line-height: 1.25rem; color: var(--cor-texto);
+}
+.pi-nav-item:hover { color: var(--cor-titulo); text-decoration: underline; }
+.pi-nav-item[aria-current="page"], .pi-nav-item.ativo { border-left-color: var(--cor-marca); background: var(--cor-zebra); font-weight: 600; color: var(--cor-titulo); text-decoration: none; }
+.pi-lateral-rodape { flex-shrink: 0; padding: 12px 0; border-top: 1px solid var(--cor-borda); }
+.pi-pessoa { padding: 0 20px 8px; }
+.pi-pessoa-nome, .pi-pessoa-detalhe { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pi-pessoa-nome { font-size: 0.875rem; line-height: 1.25rem; font-weight: 600; color: var(--cor-titulo); }
+.pi-pessoa-detalhe { font-size: 0.75rem; line-height: 1rem; color: var(--cor-secundario); }
+.pi-conteudo { min-width: 0; }
+.pi-conteudo-interno { box-sizing: border-box; width: 100%; max-width: var(--largura-conteudo); margin: 0 auto; padding: 32px 16px; }
+.pi-conteudo-interno.pi-largo { max-width: none; }  /* calendário, mapa: a tela inteira */
+.pi-cabecalho-pagina { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+.pi-titulo-pagina { margin: 0; font-size: 1.5rem; line-height: 2rem; font-weight: 700; color: var(--cor-titulo); }
+@media (min-width: 640px) { .pi-cabecalho-pagina { flex-direction: row; align-items: center; justify-content: space-between; } }
+@media (min-width: 768px) { .pi-conteudo-interno { padding: 32px; } }
+@media (min-width: 1024px) {
+  .pi-barra-celular, .pi-veu-menu, .pi-veu-menu.aberto, .pi-so-celular { display: none; }
+  .pi-lateral { transform: translateX(0); }
+  .pi-conteudo { padding-left: var(--largura-lateral); }
+}
+
+/* ── Telas de entrada (= MolduraEntrada): login, sem acesso, troca de senha ───────────
+   ⚠️ A linha "Portal Importek · acesso restrito a colaboradores" fica: sem ela o filtro de
+   phishing do Chrome marca tela de login em vercel.app. */
+.pi-entrada {
+  box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 100vh; padding: 40px 16px; background: var(--cor-fundo); font-family: var(--fonte-padrao); color: var(--cor-texto);
+}
+.pi-entrada-miolo { width: 100%; max-width: var(--largura-entrada); }
+.pi-entrada-logo { display: block; width: auto; height: 32px; margin: 0 auto; }
+.pi-entrada-cartao { box-sizing: border-box; margin-top: 24px; padding: 24px; border: 1px solid var(--cor-borda); border-radius: var(--raio-grande); background: var(--cor-superficie); }
+@media (min-width: 640px) { .pi-entrada-cartao { padding: 32px; } }
+.pi-entrada-titulo { margin: 0; font-size: 1.25rem; line-height: 1.75rem; font-weight: 700; color: var(--cor-titulo); }
+.pi-entrada-rodape { margin: 16px 0 0; text-align: center; font-size: 0.75rem; line-height: 1rem; color: var(--cor-secundario); }

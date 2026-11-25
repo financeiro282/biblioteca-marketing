@@ -1,0 +1,18 @@
+{
+  "versao": "1.0.0",
+  "pasta": "v1",
+  "origem": "portal-importek/padrao-visual/v1",
+  "copiado_em": "2026-11-24",
+  "aviso": "Cópia do padrão visual do portal. Não editar: mudar no portal e copiar de novo.",
+  "arquivos": {
+    "tokens.css": "a3fa86d7cada80d653e797876e3c959d69abe4fc9e1f6c9397a7ba3093c81b88",
+    "componentes.css": "8f980fa271968285a4a045e3ad2c41890f37a588ab6e919a55dd2da59e28390b",
+    "tailwind-preset.js": "ef3bd4c3dbebc771f146347303095a23c8f481108d51d4597d579a7836021383",
+    "moldura.js": "da96886a052e8f36ce0c19a10d5e39380d2792f9445c5d32f6be8624e8548380",
+    "conferir.mjs": "b4975d59b5c69ee8a9b0322df3bb50f05c6bbe50f126c87e08ed6ae6de436549",
+    "PADRAO.md": "d08d710cfd198fae60436ba42d8908f8d68fb73adf9cdc2c6cd29eba8ad5f360",
+    "vitrine.html": "db0d142487b6df79fba1f21c8f38f5e4e7568798618c0d8233a8751bd3af44e8",
+    "logo-importek-cor.png": "070390d085674ca24c1ecd0d94431868bd37f2bedfbecab760a50d3795f65437",
+    "versao.json": "121773ebf987fc98c1d31ddc2dc343c9290917c8b1bf209b85dc1b5bc1f1b065"
+  }
+}

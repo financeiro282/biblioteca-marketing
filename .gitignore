@@ -1,0 +1,23 @@
+node_modules/
+dist/
+.vercel/
+.env
+.env.*
+# Fotos, vídeos e exportações NUNCA vão para o Git (dados de imagem de pessoas).
+*.jpg
+*.jpeg
+*.png
+!public/*.png
+!padrao-visual/*.png
+*.heic
+*.mp4
+*.mov
+*.zip
+*.csv
+# Chaves e tokens gerados à mão nunca ficam na pasta — mas, se ficarem, não sobem.
+*.jwk
+*.jwk.json
+*token*.txt
+
+.vercel
+.env*

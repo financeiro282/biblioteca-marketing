@@ -1,0 +1,65 @@
+/* ── Padrão visual Importek · v1 · TOKENS ────────────────────────────────────────────
+   Fonte oficial: portal-importek/padrao-visual/v1/. Documentação: PADRAO.md (nesta pasta).
+
+   ⚠️ CÓPIA NUM PROJETO NÃO SE EDITA. Cada sistema recebe uma cópia numerada pelo script
+      `node scripts/copiar-padrao.mjs "<pasta do projeto>"` (no portal), e
+      `node padrao-visual/conferir.mjs` (no projeto) acusa qualquer edição. Mudar o padrão =
+      mudar AQUI, no portal, numa versão nova, e copiar de novo para cada sistema.
+
+   Só variáveis: este arquivo não muda a aparência de nada sozinho. Os nomes são os que o
+   portal já usava desde 23/10/2026 (src/index.css), com os mesmos valores; os que entraram
+   na v1 estão marcados "(v1)". As cores e a fonte vieram da identidade do Dash Comercial. */
+:root {
+  /* Marca — o amarelo só na ação principal e no item ativo da navegação */
+  --cor-marca: #f5e61b;
+  --cor-marca-hover: #e8d912;
+  --cor-sobre-marca: #23231f;
+
+  /* Texto — hierarquia por tamanho e peso, não por cor */
+  --cor-titulo: #23231f;
+  --cor-texto: #3a3a35;
+  --cor-secundario: #66665d;   /* texto de apoio (contraste AA sobre branco e sobre o fundo) */
+  --cor-apagado: #9b9b91;      /* placeholder e desabilitado — nunca texto que precisa ser lido */
+
+  /* Superfícies */
+  --cor-fundo: #fafaf5;
+  --cor-superficie: #ffffff;
+  --cor-zebra: #f4f4ec;        /* item ativo, fundo de destaque leve */
+
+  /* Bordas */
+  --cor-borda: #ecece2;        /* separadores e cartões */
+  --cor-borda-forte: #d4d4c4;  /* cabeçalho de tabela */
+  --cor-borda-campo: #8f8f85;  /* campos e botões de contorno */
+
+  /* Situação — em bolinha, faixa ou ícone; como TEXTO, só o erro-texto */
+  --cor-sucesso: #22a45d;
+  --cor-alerta: #f09c1f;
+  --cor-erro: #e05252;
+  --cor-erro-texto: #b8392f;   /* erro escrito (contraste AA) */
+
+  --cor-veu: rgba(35, 35, 31, 0.45);
+
+  /* Gráficos (v1): só em séries de gráfico e legendas, nunca em texto ou fundo de área.
+     A ordem é a de uso: a primeira série é o amarelo da marca. */
+  --cor-serie-1: #f5e61b;
+  --cor-serie-2: #23231f;
+  --cor-serie-3: #8f8f85;
+  --cor-serie-4: #3b82c4;
+  --cor-serie-5: #22a45d;
+  --cor-serie-6: #f09c1f;
+  --cor-serie-7: #8b5fc0;
+  --cor-serie-8: #e05252;
+
+  /* Forma */
+  --raio: 6px;
+  --raio-grande: 8px;          /* cartões, tabelas, janelas */
+  --sombra-janela: 0 12px 32px rgba(35, 35, 31, 0.12);   /* a ÚNICA sombra: janelas */
+
+  /* Medidas */
+  --largura-entrada: 400px;    /* telas de entrada (login, sem acesso) */
+  --largura-lateral: 240px;    /* (v1) barra lateral */
+  --largura-conteudo: 1152px;  /* (v1) área de conteúdo */
+
+  /* Fonte (v1 como variável; o portal a usa pelo Tailwind). Nunito 400, 600 e 700. */
+  --fonte-padrao: 'Nunito', system-ui, 'Segoe UI', sans-serif;
+}

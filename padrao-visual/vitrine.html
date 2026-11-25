@@ -1,0 +1,217 @@
+<!doctype html>
+<!-- Padrão visual Importek · v1 · VITRINE: todas as peças numa página, para conferir o padrão
+     lado a lado e tirar prints. Abre direto do arquivo (sem servidor). Os textos daqui seguem
+     as regras: curtos, funcionais, sem emoji. ⚠️ Cópia num projeto não se edita. -->
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Padrão visual Importek · v1</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap" />
+  <link rel="stylesheet" href="tokens.css" />
+  <link rel="stylesheet" href="componentes.css" />
+  <style>
+    /* Só da vitrine (não faz parte do padrão): espaço entre as seções e as amostras de cor. */
+    body { margin: 0; }
+    .vitrine-secoes { display: flex; flex-direction: column; gap: 24px; }
+    .vitrine-linha { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+    .vitrine-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+    .vitrine-amostra { display: flex; align-items: center; gap: 8px; font-size: 0.875rem; }
+    .vitrine-amostra span:first-child { width: 28px; height: 16px; border-radius: var(--raio); border: 1px solid var(--cor-borda); }
+  </style>
+</head>
+<body>
+  <div class="pi-moldura">
+    <header class="pi-barra-celular">
+      <a class="pi-logo" href="#"><img src="logo-importek-cor.png" alt="Importek" width="150" height="47" /></a>
+      <button type="button" class="pi-botao-texto" data-pi-menu-abrir aria-expanded="false">Menu</button>
+    </header>
+    <div class="pi-veu-menu" aria-hidden="true"></div>
+
+    <aside class="pi-lateral" aria-label="Menu do sistema">
+      <div class="pi-lateral-topo">
+        <a class="pi-logo" href="#" aria-label="Portal Importek"><img src="logo-importek-cor.png" alt="Importek" width="150" height="47" /></a>
+        <button type="button" class="pi-botao-texto pi-so-celular" data-pi-menu-fechar>Fechar</button>
+      </div>
+      <p class="pi-nome-sistema">Sistema de exemplo</p>
+      <nav class="pi-nav" aria-label="Principal">
+        <a class="pi-nav-item" href="#" aria-current="page">Visão geral</a>
+        <a class="pi-nav-item" href="#">Clientes</a>
+        <a class="pi-nav-item" href="#">Contratos</a>
+        <p class="pi-nav-grupo">Gestão</p>
+        <a class="pi-nav-item" href="#">Usuários</a>
+        <a class="pi-nav-item" href="#">Configurações</a>
+      </nav>
+      <div class="pi-lateral-rodape">
+        <div class="pi-pessoa">
+          <p class="pi-pessoa-nome">Nome da Pessoa</p>
+          <p class="pi-pessoa-detalhe">nome.sobrenome@importek.com.br</p>
+        </div>
+        <a class="pi-nav-item" href="#">Voltar ao portal</a>
+        <button type="button" class="pi-nav-item">Sair</button>
+      </div>
+    </aside>
+
+    <main class="pi-conteudo">
+      <div class="pi-conteudo-interno">
+        <div class="pi-cabecalho-pagina">
+          <h1 class="pi-titulo-pagina">Vitrine do padrão</h1>
+          <div class="vitrine-linha">
+            <button type="button" class="pi-botao-contorno" data-abrir-aviso>Mostrar aviso</button>
+            <button type="button" class="pi-botao-principal" data-abrir-janela>Abrir janela</button>
+          </div>
+        </div>
+
+        <div class="vitrine-secoes">
+          <section class="pi-cartao">
+            <h2 class="pi-cartao-titulo">Botões</h2>
+            <div class="vitrine-linha">
+              <button type="button" class="pi-botao-principal">Salvar</button>
+              <button type="button" class="pi-botao-contorno">Exportar</button>
+              <button type="button" class="pi-botao-texto">Ver detalhes</button>
+              <button type="button" class="pi-botao-perigo">Excluir</button>
+            </div>
+            <div class="vitrine-linha" style="margin-top: 12px;">
+              <button type="button" class="pi-botao-principal" disabled>Salvar</button>
+              <button type="button" class="pi-botao-contorno" disabled>Exportar</button>
+              <button type="button" class="pi-botao-texto" disabled>Ver detalhes</button>
+              <button type="button" class="pi-botao-perigo" disabled>Excluir</button>
+            </div>
+          </section>
+
+          <section class="pi-cartao">
+            <h2 class="pi-cartao-titulo">Campos</h2>
+            <div class="vitrine-grade">
+              <div class="pi-grupo">
+                <label class="pi-rotulo" for="v-nome">Cliente</label>
+                <input id="v-nome" class="pi-campo" placeholder="Nome, código ou CNPJ" />
+                <p class="pi-campo-ajuda">Busca na base de clientes.</p>
+              </div>
+              <div class="pi-grupo">
+                <label class="pi-rotulo" for="v-valor">Valor</label>
+                <input id="v-valor" class="pi-campo" value="12,5x" aria-invalid="true" />
+                <p class="pi-campo-erro" role="alert">Use só números, com vírgula nos centavos.</p>
+              </div>
+              <div class="pi-grupo">
+                <label class="pi-rotulo" for="v-linha">Linha</label>
+                <select id="v-linha" class="pi-campo"><option>Todas</option><option>Premier</option><option>UPASS</option></select>
+              </div>
+              <div class="pi-grupo">
+                <label class="pi-rotulo" for="v-off">Código</label>
+                <input id="v-off" class="pi-campo" value="1264" disabled />
+              </div>
+            </div>
+            <div class="pi-grupo" style="margin-top: 16px;">
+              <label class="pi-rotulo" for="v-obs">Observação</label>
+              <textarea id="v-obs" class="pi-campo" rows="3"></textarea>
+            </div>
+          </section>
+
+          <section class="pi-cartao">
+            <h2 class="pi-cartao-titulo">Abas e filtros</h2>
+            <div class="pi-abas" role="tablist">
+              <button type="button" class="pi-aba" role="tab" aria-selected="true">Informações</button>
+              <button type="button" class="pi-aba" role="tab" aria-selected="false">Dashboard</button>
+              <button type="button" class="pi-aba" role="tab" aria-selected="false">Histórico</button>
+            </div>
+            <div class="pi-filtros">
+              <div class="pi-grupo">
+                <span class="pi-rotulo">Período</span>
+                <div class="pi-opcoes" role="group" aria-label="Período">
+                  <button type="button" class="pi-opcao" aria-pressed="true">Ano até a base</button>
+                  <button type="button" class="pi-opcao" aria-pressed="false">Mês atual</button>
+                </div>
+              </div>
+              <div class="pi-grupo" style="min-width: 200px;">
+                <label class="pi-rotulo" for="v-busca">Buscar</label>
+                <input id="v-busca" class="pi-campo" placeholder="Cliente" />
+              </div>
+              <button type="button" class="pi-botao-contorno">Limpar filtros</button>
+            </div>
+          </section>
+
+          <section>
+            <div class="pi-tabela-caixa">
+              <table class="pi-tabela">
+                <thead>
+                  <tr><th>Cliente</th><th class="pi-so-largo">Código</th><th>Situação</th><th class="pi-num">Faturado</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td>Hospital Exemplo Ltda</td><td class="pi-so-largo">1264</td><td><span class="pi-status pi-status-sucesso">Vigente</span></td><td class="pi-num">R$ 1.234.567,89</td></tr>
+                  <tr><td>Clínica Modelo</td><td class="pi-so-largo">151</td><td><span class="pi-status pi-status-alerta">A renovar</span></td><td class="pi-num">R$ 98.765,40</td></tr>
+                  <tr><td>Distribuidora Teste</td><td class="pi-so-largo">77</td><td><span class="pi-status pi-status-erro">Vencido</span></td><td class="pi-num">R$ 0,00</td></tr>
+                  <tr><td>Cliente Novo</td><td class="pi-so-largo">942</td><td><span class="pi-status">Em negociação</span></td><td class="pi-num">—</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="pi-cartao">
+            <h2 class="pi-cartao-titulo">Avisos</h2>
+            <div class="vitrine-secoes" style="gap: 12px;">
+              <div class="pi-aviso" role="status">Base do Dash de 04/11/2026.</div>
+              <div class="pi-aviso pi-aviso-alerta" role="alert">O Dash não respondeu. Valores da última leitura guardada.</div>
+              <div class="pi-aviso pi-aviso-erro" role="alert">Não foi possível salvar. Tente de novo.</div>
+            </div>
+          </section>
+
+          <section class="pi-cartao">
+            <h2 class="pi-cartao-titulo">Vazio e carregando</h2>
+            <p class="pi-vazio">Nenhum contrato com este cliente.</p>
+            <p class="pi-carregando" role="status">Carregando…</p>
+          </section>
+
+          <section class="pi-cartao">
+            <h2 class="pi-cartao-titulo">Cores de gráfico</h2>
+            <div class="vitrine-grade">
+              <div class="vitrine-amostra"><span style="background: var(--cor-serie-1);"></span><span>Série 1</span></div>
+              <div class="vitrine-amostra"><span style="background: var(--cor-serie-2);"></span><span>Série 2</span></div>
+              <div class="vitrine-amostra"><span style="background: var(--cor-serie-3);"></span><span>Série 3</span></div>
+              <div class="vitrine-amostra"><span style="background: var(--cor-serie-4);"></span><span>Série 4</span></div>
+              <div class="vitrine-amostra"><span style="background: var(--cor-serie-5);"></span><span>Série 5</span></div>
+              <div class="vitrine-amostra"><span style="background: var(--cor-serie-6);"></span><span>Série 6</span></div>
+              <div class="vitrine-amostra"><span style="background: var(--cor-serie-7);"></span><span>Série 7</span></div>
+              <div class="vitrine-amostra"><span style="background: var(--cor-serie-8);"></span><span>Série 8</span></div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div class="pi-veu" data-janela hidden>
+    <div class="pi-janela" role="dialog" aria-modal="true" aria-label="Excluir contrato">
+      <header class="pi-janela-cabecalho">
+        <h2 class="pi-janela-titulo">Excluir contrato</h2>
+        <button type="button" class="pi-botao-texto" data-fechar-janela>Fechar</button>
+      </header>
+      <div class="pi-janela-corpo">O contrato e os arquivos dele saem do sistema. Não dá para desfazer.</div>
+      <footer class="pi-janela-rodape">
+        <button type="button" class="pi-botao-contorno" data-fechar-janela>Cancelar</button>
+        <button type="button" class="pi-botao-perigo" data-fechar-janela>Excluir</button>
+      </footer>
+    </div>
+  </div>
+  <div class="pi-aviso-flutuante" data-aviso hidden role="status">Alterações salvas.</div>
+
+  <script src="moldura.js"></script>
+  <script>
+    // Só da vitrine: abrir e fechar a janela e o aviso flutuante.
+    (function () {
+      var janela = document.querySelector('[data-janela]');
+      var aviso = document.querySelector('[data-aviso]');
+      function fechar() { janela.hidden = true; }
+      document.querySelector('[data-abrir-janela]').addEventListener('click', function () { janela.hidden = false; janela.style.display = ''; });
+      document.querySelectorAll('[data-fechar-janela]').forEach(function (b) { b.addEventListener('click', fechar); });
+      janela.addEventListener('mousedown', function (e) { if (e.target === janela) fechar(); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') fechar(); });
+      document.querySelector('[data-abrir-aviso]').addEventListener('click', function () {
+        aviso.hidden = false; setTimeout(function () { aviso.hidden = true; }, 3000);
+      });
+    })();
+  </script>
+</body>
+</html>

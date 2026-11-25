@@ -1,0 +1,6 @@
+{
+  "versao": "1.0.0",
+  "data": "2026-11-05",
+  "origem": "portal-importek/padrao-visual/v1",
+  "arquivos": ["tokens.css", "componentes.css", "tailwind-preset.js", "moldura.js", "conferir.mjs", "PADRAO.md", "vitrine.html", "logo-importek-cor.png", "versao.json"]
+}
