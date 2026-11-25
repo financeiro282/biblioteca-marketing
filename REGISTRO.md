@@ -5,7 +5,7 @@
 
 ## EM USO AGORA
 
-Lucas Cerda — desde 2026-11-25 11:37 — Fase 4 (download, zip e links externos) — testar no ar
+Lucas Cerda — desde 2026-11-25 11:37 — Fase 4 no ar e testada; próximo: Fase 5
 
 <!-- Formato: Nome — desde AAAA-MM-DD HH:MM — o que vai fazer -->
 
@@ -50,6 +50,7 @@ Lucas Cerda — desde 2026-11-25 11:37 — Fase 4 (download, zip e links externo
     - 390 px sem rolagem; console sem erro.
   - Corrigido no caminho: dois botões principais na janela "Link criado"; faltava a etiqueta "Vídeo" na página pública.
 - **No ar (25/11):** o 1º pedido de zip deu 500: "more than one relationship was found for arquivos and eventos" (a capa do evento é a 2ª ligação). Corrigido: o evento vem numa consulta à parte (`api/zips.js`). A demonstração não pega esse tipo de erro: só o banco de verdade.
+- **Zip no ar (25/11, 15:26):** deu certo (Lucas). Velocidade medida: 108 MB em 5,5 a 7,1 s (16 a 20 MB/s), então uma parte de 2 GB leva ~2 min, dentro dos 5 min da função. Sem erro depois da correção. Link externo testado no ar pelo Lucas ("deu td certo"): criar com senha, senha errada, abrir, baixar todos, revogar. Logs sem erro depois da correção do zip. **Fase 4 completa no ar.**
 - **Fica para depois:** zip pela página do link externo (se o Marketing pedir); apagar os zips de link vencido (Fase 5).
 
 ### 2026-11-25 — Lucas (com Claude) — FASE 3 (organização dos arquivos) — publicada (Lucas: "pode fazer o commit e push")
