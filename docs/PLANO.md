@@ -131,7 +131,7 @@ Navegador ──(1) pede links assinados────▶ api/ (Vercel, São Paulo
 | 2. Envio | arrastar e soltar, envio em partes direto ao R2, retomada, duplicados, miniaturas, HEIC, capa de vídeo, data de captura | **feita e no ar em 25/11** (falta o teste grande: 300 fotos + vídeo de GB com queda) |
 | 3. Organização | criar/editar eventos, tags, direito de uso, favoritos, "Aprovadas", lixeira (mandar) | **feita em 25/11** (eventos no ar; arquivos: demonstração) |
 | 4. Download e links | original, zip em segundo plano com aviso pelo Portal, links externos com validade/senha/revogação | **feita em 25/11 no modo demonstração**; no ar depois do SQL 02 e da regra `zips/` no Cloudflare (PASSO-A-PASSO, Fase 4) |
-| 5. Controle | lixeira (ver/restaurar/apagar de vez em 30 dias), painel de uso, alertas, log e relatórios | **feita em 25/11 no modo demonstração**; no ar depois do SQL 03 (PASSO-A-PASSO, Fase 5) |
+| 5. Controle | lixeira (ver/restaurar/apagar de vez em 30 dias), painel de uso, alertas, log e relatórios | **no ar em 25/11** (SQL 03 rodado, 8/8 ok); falta o teste do Lucas no ar (PASSO-A-PASSO, Fase 5, passo 3) |
 | 6. Produção | bucket definitivo + cópia no B2, endereço e CSP no Portal, roteiro completo, restauração, carga dos 78 GB, liberação | a fazer |
 
 ## Limites que pesam

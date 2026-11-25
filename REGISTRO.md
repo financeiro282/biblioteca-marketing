@@ -5,18 +5,17 @@
 
 ## EM USO AGORA
 
-Lucas Cerda — desde 2026-11-25 11:37 — Fase 5 publicada; aguarda o SQL 03 (se ainda não rodou) e o teste no ar
+Lucas Cerda — desde 2026-11-25 11:37 — Fase 5 no ar; aguarda o teste do Lucas
 
 <!-- Formato: Nome — desde AAAA-MM-DD HH:MM — o que vai fazer -->
 
 ## Histórico
 
-### 2026-11-25 — Lucas (com Claude) — FASE 5 (lixeira, painel de uso e log) — PUBLICADA (commit e push)
+### 2026-11-25 — Lucas (com Claude) — FASE 5 (lixeira, painel de uso e log) — NO AR (commit e push; SQL 03 rodado, 8/8 ok)
 - **Pedido do Lucas:** "sim, pode fazer" (commits pendentes e seguir para a Fase 5); depois "pode fazer o commit e push".
 - **Depende de:**
-  - SQL 03 revisado pelo Leo e rodado pelo Lucas, com backup. Até ele rodar, só as partes novas falham
-    (apagar de vez, crescimento por mês, medição e a lixeira vencida da rotina das 8h, que registra o erro e segue);
-    o resto do sistema não muda.
+  - SQL 03: **revisado pelo Leo e rodado pelo Lucas em 25/11/2026, conferência 8/8 ok** (informado pelo Lucas).
+  - Falta: o teste do Lucas no ar (PASSO-A-PASSO, Fase 5, passo 3) e a conferência dos logs da Vercel.
   - Passo a passo: `docs/PASSO-A-PASSO.md`, "Fase 5".
 - **Banco (`importek-sistemas/banco/biblioteca/03-lixeira-e-uso.sql` + `03-desfazer.sql`):** só acrescenta 6 funções.
   - Apagar de vez: só o Administrador, e só o que está na lixeira.

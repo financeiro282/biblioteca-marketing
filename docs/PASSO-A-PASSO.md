@@ -223,7 +223,7 @@ O R2 apaga em até ~24 h depois do prazo; a tela "Meus downloads" já mostra o z
 Pronta e testada no modo demonstração. **A ordem é a mesma da Fase 4:** primeiro o SQL 03, depois a publicação.
 O SQL só acrescenta funções: o sistema no ar continua igual com ele.
 
-### 1. SQL 03 no banco do Portal (Leo revisa, Lucas roda, com backup)
+### 1. SQL 03 no banco do Portal (Leo revisa, Lucas roda, com backup) — FEITO em 25/11/2026 (Leo revisou; Lucas rodou; conferência 8/8 ok)
 
 Arquivos: `importek-sistemas/banco/biblioteca/03-lixeira-e-uso.sql` e `03-desfazer.sql`.
 - **O que faz:** só acrescenta 6 funções. Nenhuma tabela, coluna, política ou permissão muda.
@@ -235,7 +235,7 @@ Arquivos: `importek-sistemas/banco/biblioteca/03-lixeira-e-uso.sql` e `03-desfaz
 - **Como rodar:** igual ao 02 (fotografia e checagem antes e depois). A **conferência tem 8 linhas, todas `ok = true`**.
   Deu errado? `03-desfazer.sql` (conferência de 3 linhas).
 
-### 2. Publicar (o Claude faz o commit e o push quando o Lucas pedir)
+### 2. Publicar (o Claude faz o commit e o push quando o Lucas pedir) — FEITO em 25/11/2026 (`51d0d32`)
 
 - **Na Vercel e no Portal, nada novo.** A rotina diária usa o cron que já existe (8h), que agora também apaga a
   lixeira vencida e mede o uso.
