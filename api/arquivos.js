@@ -10,7 +10,7 @@ import { ehUuid, lerFiltros, POR_PAGINA } from '../compartilhado/busca.js';
 import { erro, exigirSessao, parametros, responder, responderErro } from './_comum.js';
 import { linkDaMiniatura, linkDaPrevia } from './_r2.js';
 
-export function arquivoParaTela(a) {
+export async function arquivoParaTela(a) {
   return {
     id: a.id, evento_id: a.evento_id, evento_nome: a.evento_nome, evento_data: a.evento_data,
     tipo: a.tipo, nome_original: a.nome_original, extensao: a.extensao, tamanho_bytes: Number(a.tamanho_bytes) || 0,
@@ -18,8 +18,8 @@ export function arquivoParaTela(a) {
     capturado_em: a.capturado_em, camera: a.camera, autor: a.autor, legenda: a.legenda, tags: a.tags ?? [],
     direito_arquivo: a.direito_arquivo, direito_evento: a.direito_evento, direito_efetivo: a.direito_efetivo,
     aprovada: !!a.aprovada, favorito: !!a.favorito,
-    miniatura_url: linkDaMiniatura(a.chave_miniatura),
-    previa_url: linkDaPrevia(a.chave_previa),
+    miniatura_url: await linkDaMiniatura(a.chave_miniatura),
+    previa_url: await linkDaPrevia(a.chave_previa),
   };
 }
 
@@ -37,7 +37,7 @@ export default async function handler(req, res) {
       if (error) throw error;
       const arquivo = (data ?? [])[0];
       if (!arquivo) throw erro(404, 'Arquivo não encontrado.', 'nao_encontrado');
-      return responder(res, 200, { arquivo: arquivoParaTela(arquivo) });
+      return responder(res, 200, { arquivo: await arquivoParaTela(arquivo) });
     }
 
     const f = lerFiltros(p);
@@ -49,7 +49,7 @@ export default async function handler(req, res) {
     if (error) throw error;
     const linhas = data ?? [];
     return responder(res, 200, {
-      arquivos: linhas.map(arquivoParaTela),
+      arquivos: await Promise.all(linhas.map(arquivoParaTela)),
       total: linhas.length ? Number(linhas[0].total) : 0,
       pagina: f.pagina, por_pagina: POR_PAGINA,
     });

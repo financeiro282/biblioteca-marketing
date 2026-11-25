@@ -10,9 +10,13 @@ import { CODIGOS_TIPO } from './formatos.js';
 /** Minúsculo e sem acento (igual à coluna `busca` do banco). */
 export const normalizar = (t) => String(t ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
-/** Texto da busca pronto para o filtro: sem acento e sem os caracteres que a API do banco usa como comando. */
+/**
+ * Texto da busca pronto para o filtro: sem acento, sem "%" e "\" (no banco, o `like` os leria como curinga e como
+ * escape) e sem a pontuação que só separa palavras. O "_" e o "." FICAM (25/11/2026): sem eles, "IMG_9001.JPG" virava
+ * "img 9001 jpg" e nunca achava o arquivo pelo nome (no `like`, "_" vale uma letra qualquer — inclusive ele mesmo).
+ */
 export function limparBusca(q) {
-  return normalizar(q).replace(/[%_,()*:"'\\.;<>{}[\]|&!=]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
+  return normalizar(q).replace(/[%,()*:"'\\;<>{}[\]|&!=]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

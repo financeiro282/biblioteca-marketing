@@ -99,3 +99,47 @@ test('criar e editar evento: Marketing cria e altera; Colaborador não; versão 
   como('colaborador');
   assert.equal(responderDemo('GET', `/eventos?id=${r.evento.id}`)[0], 200, 'agora "Somente uso interno": o Colaborador vê');
 });
+
+test('envio na demonstração: simples e em partes, duplicado avisado, Colaborador recusado, arquivo aparece no evento', async () => {
+  const { ENVIOS } = await import('../demo/plugin-demo.mjs');
+  const evento = EVENTOS[0];
+  const sha = (n) => String(n).padStart(64, '0');
+  const pedido = { acao: 'iniciar', evento_id: evento.id, nome: 'IMG_9001.JPG', tamanho: 1000, sha256: sha(1) };
+  como('colaborador');
+  assert.equal(responderDemo('POST', '/envio', pedido)[0], 403);
+  como('marketing');
+  const [st, r] = responderDemo('POST', '/envio', pedido);
+  assert.equal(st, 200);
+  assert.equal(r.arquivo.modo, 'simples');
+  assert.match(r.links.original, /^\/biblioteca\/__demo\/r2\/originais\/2026\/[0-9a-f-]{36}\.jpg$/);
+  assert.equal(responderDemo('POST', '/envio', { acao: 'concluir', id: r.arquivo.id })[0], 409, 'nada chegou: incompleto');
+  ENVIOS.get(r.arquivo.id).original = 1000; // o que o PUT no "R2" de mentira faria
+  assert.equal(responderDemo('POST', '/envio', { acao: 'concluir', id: r.arquivo.id, metadados: { camera: 'Câmera Z (exemplo)' } })[0], 200);
+  const [, lista] = responderDemo('GET', `/arquivos?evento=${evento.id}&q=IMG_9001`);
+  assert.equal(lista.total, 1);
+  assert.equal(lista.arquivos[0].camera, 'Câmera Z (exemplo)');
+  const [stDup, dup] = responderDemo('POST', '/envio', { ...pedido, nome: 'copia.jpg' });
+  assert.equal(stDup, 409);
+  assert.equal(dup.codigo, 'duplicado');
+  assert.equal(dup.evento_nome, evento.nome);
+
+  // Em partes (40 MiB = 3 partes), com retomada: a 2ª chamada de iniciar devolve as partes que já chegaram.
+  const MiB = 1024 * 1024;
+  const grande = { ...pedido, nome: 'VID_9002.MP4', tamanho: 40 * MiB, sha256: sha(2) };
+  const [, g] = responderDemo('POST', '/envio', grande);
+  assert.deepEqual([g.arquivo.modo, g.arquivo.total_partes, g.arquivo.parte_bytes], ['partes', 3, 16 * MiB]);
+  const env = ENVIOS.get(g.arquivo.id);
+  env.partes.set(1, 16 * MiB);
+  const [, retomado] = responderDemo('POST', '/envio', grande);
+  assert.equal(retomado.retomada, true);
+  assert.deepEqual(retomado.arquivo.partes_prontas.map((p) => p.numero), [1]);
+  const [, links] = responderDemo('POST', '/envio', { acao: 'assinar', id: g.arquivo.id, partes: [2, 3] });
+  assert.deepEqual(links.partes.map((p) => p.numero), [2, 3]);
+  assert.equal(responderDemo('POST', '/envio', { acao: 'assinar', id: g.arquivo.id, partes: [4] })[0], 400);
+  env.partes.set(2, 16 * MiB);
+  env.partes.set(3, 8 * MiB);
+  const partes = [1, 2, 3].map((n) => ({ numero: n, etag: `"demo-${n}"` }));
+  assert.equal(responderDemo('POST', '/envio', { acao: 'concluir', id: g.arquivo.id, partes: partes.slice(0, 2) })[0], 400);
+  assert.equal(responderDemo('POST', '/envio', { acao: 'concluir', id: g.arquivo.id, partes })[0], 200);
+  assert.equal(responderDemo('GET', `/arquivos?evento=${evento.id}&q=VID_9002`)[1].arquivos[0].tipo, 'video');
+});

@@ -25,8 +25,10 @@ Plano, custos e decisões: `docs/PLANO.md`. Configuração: `docs/PASSO-A-PASSO.
 | `api/_comum.js` | sessão (cookie httpOnly em `/biblioteca/api`), cliente do banco **por pedido** com o cabeçalho da sessão, token do papel, assinatura do Portal |
 | `api/sessao.js` | quem está aqui · entrar (troca do passe) · sair |
 | `api/portal.js` | avisos do Portal (`portal-evento`) e conferência de acessos (`sincronizar-portal` e o cron diário) |
-| `api/eventos.js` · `api/arquivos.js` | consulta com busca e filtros (funções `buscar_eventos` e `buscar_arquivos` do banco, com o RLS de quem chama) |
-| `api/_r2.js` | links assinados do R2 (Fase 2; hoje devolve vazio) |
+| `api/eventos.js` · `api/arquivos.js` | consulta com busca e filtros (funções `buscar_eventos` e `buscar_arquivos` do banco, com o RLS de quem chama); criar e editar evento |
+| `api/envio.js` | envio (Fase 2): iniciar, assinar partes, concluir (confere o tamanho no R2), cancelar. O arquivo vai do navegador direto ao R2 |
+| `api/_r2.js` | links assinados do R2 (aws4fetch) e o envio em partes; sem `R2_*` configurado, devolve vazio |
+| `src/envio/` | a fila de envio no navegador: SHA-256 (duplicados), prévias e dados (EXIF, vídeo), partes, retomada |
 | `compartilhado/` | regras usadas pela tela, pela API e pela demonstração: perfis, direito, formatos, busca, visibilidade |
 | `demo/` | modo demonstração (só no `npm run dev`; nunca vai para a Vercel) |
 | `src/` | telas (React + Vite + Tailwind, padrão visual v1.0.0 do Portal em `padrao-visual/`, cópia que não se edita) |
@@ -34,7 +36,7 @@ Plano, custos e decisões: `docs/PLANO.md`. Configuração: `docs/PASSO-A-PASSO.
 
 - **O navegador nunca fala com o banco** nem com o R2 com chave.
 - **Sem sessão válida, o banco não devolve nenhuma linha**, nem para o servidor.
-- **Funções da Vercel:** 4 de 12 (teto do Hobby). Rota nova: juntar numa existente sempre que der.
+- **Funções da Vercel:** 5 de 12 (teto do Hobby). Rota nova: juntar numa existente sempre que der.
 
 ## Variáveis (Vercel, só no servidor; só os nomes)
 

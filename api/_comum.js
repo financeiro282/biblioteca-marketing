@@ -206,6 +206,16 @@ export async function exigirPermissao(req, permissao) {
   return r;
 }
 
+// ── log de ações ────────────────────────────────────────────────────────────
+// Em nome de quem chama (a política log_incluir confere e-mail e perfil). O log nunca desfaz o que já foi gravado:
+// se falhar, fica a linha no log da Vercel. `detalhes`: só o necessário (nomes de campos, nunca dado pessoal à toa).
+export async function registrarAcao(sb, eu, acao, alvoTipo, alvoId, detalhes = null) {
+  const { error } = await sb.from('log_acoes').insert({
+    email: eu.email, nome: eu.nome, perfil: eu.perfil, acao, alvo_tipo: alvoTipo, alvo_id: alvoId, detalhes,
+  });
+  if (error) console.error(`[log] ${acao} não gravado:`, error.message);
+}
+
 // ── Portal ──────────────────────────────────────────────────────────────────
 export function portal() {
   const { PORTAL_URL, PORTAL_SEGREDO } = process.env;

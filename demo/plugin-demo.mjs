@@ -15,6 +15,9 @@ import { randomUUID } from 'node:crypto';
 import { bate, ehUuid, lerFiltros, normalizar, POR_PAGINA } from '../compartilhado/busca.js';
 import { direitoEfetivo } from '../compartilhado/direito.js';
 import { camposAlterados, lerEvento } from '../compartilhado/evento.js';
+import {
+  anoDaChave, chaveMiniatura, chaveOriginal, chavePrevia, lerInicio, lerMetadados, lerPartes, PARTES_POR_PEDIDO, planoDeEnvio,
+} from '../compartilhado/envio.js';
 import { pode } from '../compartilhado/perfis.js';
 import { arquivoVisivel, eventoVisivel, paraConsulta } from '../compartilhado/visibilidade.js';
 import * as D from './dados-demo.mjs';
@@ -95,6 +98,97 @@ function listarArquivos(perfil, f, id = null) {
 
 const SEM_SESSAO = [401, { erro: 'Sessão encerrada (demonstração). Entre de novo pelo Portal simulado.', codigo: 'sem_sessao' }];
 
+// ── envio na demonstração ───────────────────────────────────────────────────────────────────────────────
+// Mesmas regras (compartilhado/envio.js). Os bytes enviados ao "R2" de mentira são só contados e descartados.
+// Para ver a retomada: um arquivo com "queda" no nome falha a 1ª tentativa (a parte 2, ou o envio simples).
+export const ENVIOS = new Map();
+const R2_DEMO = `${BASE}/__demo/r2`;
+const linkDemo = (env, parte = null) => `${R2_DEMO}/${env.chave}${parte ? `?partNumber=${parte}` : ''}`;
+function linksDemo(env) {
+  const ano = env.chave.split('/')[1];
+  return {
+    original: env.modo === 'simples' ? linkDemo(env) : null,
+    miniatura: `${R2_DEMO}/${chaveMiniatura(ano, env.id)}`,
+    previa: env.tipo === 'video' ? null : `${R2_DEMO}/${chavePrevia(ano, env.id)}`,
+  };
+}
+
+function iniciarDemo(corpo) {
+  const r = lerInicio(corpo);
+  if (r.erro) return [400, { erro: r.erro }];
+  const v = r.valores;
+  const ev = POR_EVENTO.get(v.evento_id);
+  if (!ev || ev.excluido_em || !eventoVisivel(estado.perfil, ev)) return [404, { erro: 'Evento não encontrado.', codigo: 'nao_encontrado' }];
+  const ja = D.ARQUIVOS.find((a) => a.sha256 === v.sha256 && !a.excluido_em);
+  if (ja) {
+    const onde = POR_EVENTO.get(ja.evento_id);
+    return [409, { erro: `Este arquivo já está no evento "${onde.nome}".`, codigo: 'duplicado', arquivo_id: ja.id, evento_id: ja.evento_id, evento_nome: onde.nome }];
+  }
+  let env = [...ENVIOS.values()].find((e) => e.sha === v.sha256 && !e.pronto);
+  const retomada = !!env;
+  if (env) Object.assign(env, { evento_id: ev.id, nome: v.nome_original, direito: v.direito_uso, autor: v.autor });
+  else {
+    const id = randomUUID();
+    const plano = planoDeEnvio(v.tamanho_bytes);
+    env = {
+      id, sha: v.sha256, nome: v.nome_original, tamanho: v.tamanho_bytes, tipo: v.tipo, ext: v.extensao, evento_id: ev.id,
+      chave: chaveOriginal(anoDaChave(ev.data_evento), id, v.extensao), modo: plano.modo, parte: plano.parte_bytes, total: plano.total_partes,
+      partes: new Map(), original: null, miniatura: false, previa: false, autor: v.autor, direito: v.direito_uso, pronto: false, falhou: false,
+    };
+    ENVIOS.set(id, env);
+  }
+  const prontas = env.modo === 'partes'
+    ? [...env.partes.entries()].filter(([n, t]) => t === env.parte || n === env.total).map(([n]) => ({ numero: n, etag: `"demo-${n}"` }))
+    : [];
+  return [200, { arquivo: { id: env.id, modo: env.modo, parte_bytes: env.parte, total_partes: env.total, partes_prontas: prontas }, links: linksDemo(env), retomada }];
+}
+
+function concluirDemo(env, corpo) {
+  if (env.pronto) return [200, { arquivo: { id: env.id } }];
+  let recebido = env.original;
+  if (env.modo === 'partes') {
+    const partes = lerPartes(corpo.partes, env.total);
+    if (!partes || partes.some((p) => !env.partes.has(p.numero))) return [400, { erro: 'Faltam partes do arquivo. Envie de novo.', codigo: 'partes' }];
+    recebido = partes.reduce((s, p) => s + env.partes.get(p.numero), 0);
+  }
+  if (recebido !== env.tamanho) return [409, { erro: 'O arquivo não chegou inteiro ao armazenamento. Envie de novo.', codigo: 'incompleto' }];
+  const m = lerMetadados(corpo.metadados);
+  const ev = POR_EVENTO.get(env.evento_id);
+  D.ARQUIVOS.push({
+    id: env.id, evento_id: env.evento_id, tipo: env.tipo, extensao: env.ext, nome_original: env.nome, tamanho_bytes: env.tamanho,
+    largura: m.largura, altura: m.altura, duracao_seg: m.duracao_seg, capturado_em: m.capturado_em ?? `${ev.data_evento}T15:00:00.000Z`,
+    camera: m.camera, autor: `${env.autor || 'Envio de teste'} (exemplo)`, legenda: 'Enviado na demonstração', tags: [],
+    direito_uso: env.direito, aprovada: false, situacao: 'pronto', excluido_em: null,
+    tem_miniatura: corpo.miniatura === true && env.miniatura, sha256: env.sha,
+  });
+  env.pronto = true;
+  return [200, { arquivo: { id: env.id } }];
+}
+
+// O "R2" de mentira: recebe o PUT, conta os bytes e descarta (nada é gravado em disco nem guardado na memória).
+async function r2Ficticio(req, res) {
+  let bytes = 0;
+  for await (const p of req) bytes += p.length;
+  if (req.method !== 'PUT') { res.statusCode = 405; return res.end(); }
+  const url = new URL(req.url, 'http://demo');
+  const chave = decodeURIComponent(url.pathname.replace(/^\//, ''));
+  const env = ENVIOS.get(/([0-9a-f-]{36})\.[a-z0-9]+$/.exec(chave)?.[1]);
+  if (!env) { res.statusCode = 404; return res.end(); }
+  const parte = Number(url.searchParams.get('partNumber')) || null;
+  if (/queda/i.test(env.nome) && !env.falhou && (parte === 2 || (!parte && chave === env.chave))) {
+    env.falhou = true;
+    res.statusCode = 503;
+    return res.end();
+  }
+  if (chave.startsWith('miniaturas/')) env.miniatura = bytes > 0;
+  else if (chave.startsWith('previas/')) env.previa = bytes > 0;
+  else if (parte) env.partes.set(parte, bytes);
+  else env.original = bytes;
+  res.statusCode = 200;
+  res.setHeader('ETag', `"demo-${parte ?? 1}"`);
+  res.end();
+}
+
 // Rotas /api fictícias: 'MÉTODO /caminho' → (params, corpo) => [status, resposta]
 const ROTAS = {
   'GET /sessao': () => (estado.saiu ? SEM_SESSAO : [200, { ...D.PESSOA, perfil: estado.perfil }]),
@@ -147,6 +241,23 @@ const ROTAS = {
     const todos = listarArquivos(estado.perfil, f);
     const pagina = todos.slice((f.pagina - 1) * POR_PAGINA, f.pagina * POR_PAGINA);
     return [200, { arquivos: pagina.map((a) => arquivoParaTela(a, estado.perfil)), total: todos.length, pagina: f.pagina, por_pagina: POR_PAGINA }];
+  },
+  // Envio (como api/envio.js), com um "R2" de mentira em /biblioteca/__demo/r2 que só CONTA os bytes e descarta
+  // o conteúdo (nada é guardado). O arquivo novo aparece nas listas com imagem fictícia.
+  'POST /envio': (_p, corpo) => {
+    if (estado.saiu) return SEM_SESSAO;
+    if (!pode(estado.perfil, 'enviar')) return [403, { erro: 'Seu perfil não envia arquivos.', codigo: 'sem_permissao' }];
+    if (corpo.acao === 'iniciar') return iniciarDemo(corpo);
+    const env = ENVIOS.get(String(corpo.id ?? ''));
+    if (!env) return [404, { erro: 'Envio não encontrado.', codigo: 'nao_encontrado' }];
+    if (corpo.acao === 'assinar') {
+      const pedidas = Array.isArray(corpo.partes) ? corpo.partes.map(Number) : [];
+      if (pedidas.length > PARTES_POR_PEDIDO || pedidas.some((n) => !Number.isInteger(n) || n < 1 || n > env.total)) return [400, { erro: 'Pedido inválido.' }];
+      return [200, { partes: pedidas.map((n) => ({ numero: n, url: linkDemo(env, n) })), links: linksDemo(env) }];
+    }
+    if (corpo.acao === 'cancelar') { env.partes.clear(); return [200, { ok: true }]; }
+    if (corpo.acao === 'concluir') return concluirDemo(env, corpo);
+    return [400, { erro: 'Ação desconhecida.' }];
   },
   'POST /__demo/perfil': (_p, corpo) => {
     if (!D.PERFIS.some((x) => x.codigo === corpo.perfil)) return [400, { erro: 'Perfil desconhecido.' }];
@@ -248,6 +359,7 @@ export default function pluginDemo() {
         })().catch((e) => json(res, 500, { erro: String(e?.message || e) }));
       });
       server.middlewares.use(IMG, imagemFicticia);
+      server.middlewares.use(R2_DEMO, (req, res) => { r2Ficticio(req, res).catch(() => { res.statusCode = 500; res.end(); }); });
       server.middlewares.use(PORTAL_DEMO, portalSimulado);
       server.httpServer?.once('listening', () => {
         server.config.logger.info(`\n  ${MARCA}: sem banco, sem R2, sem Portal, sem chaves. Perfis na faixa do topo.\n`);

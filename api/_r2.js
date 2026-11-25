@@ -1,19 +1,144 @@
-// Links do Cloudflare R2 (bucket PRIVADO) — miniatura, prévia e original.
+// Cloudflare R2 (bucket PRIVADO) — links assinados e o envio em partes. Só no servidor.
 //
-// FASE 1: ainda não há R2. As funções devolvem null e a tela mostra um quadro neutro no lugar da imagem.
-// FASE 2 (envio): links assinados (S3 SigV4) de poucos minutos, gerados AQUI no servidor com as chaves do R2 em
-// variáveis de ambiente (R2_CONTA, R2_CHAVE_ID, R2_CHAVE_SEGREDO, R2_BUCKET) — nunca no navegador. Nenhum link
-// público permanente: sem domínio público e sem r2.dev.
+// As chaves ficam em variáveis de ambiente da Vercel (R2_CONTA, R2_CHAVE_ID, R2_CHAVE_SEGREDO, R2_BUCKET) e nunca
+// chegam ao navegador: ele recebe só LINKS ASSINADOS (S3 SigV4, biblioteca aws4fetch — aprovada pelo Lucas em
+// 25/11/2026) que valem poucos minutos e servem a UM arquivo e UMA operação. Sem domínio público e sem r2.dev.
+// Endereço no formato de caminho: https://<conta>.r2.cloudflarestorage.com/<bucket>/<chave> — é só esse endereço da
+// conta que entra no CSP do Portal (nunca *.r2.cloudflarestorage.com).
 //
-// Por que null em vez de um endereço falso: uma imagem quebrada na tela parece defeito; o quadro neutro deixa
-// claro que ainda não há prévia.
+// Links de VER (miniatura, prévia): assinados com a hora arredondada para baixo em janelas de 10 min e validade de
+// 20 min. O mesmo link sai igual durante a janela (o navegador reaproveita a imagem que já baixou) e sempre vale
+// pelo menos 10 min depois de entregue.
+// Sem R2 configurado (Fase 1, demonstração), os links saem null e a tela mostra o quadro neutro.
 
-/** Link assinado da miniatura (320 px). FASE 1: sem R2 → null. */
-export function linkDaMiniatura(chave) {
-  return chave ? null : null;
+import { AwsClient } from 'aws4fetch';
+
+let cache = null;
+function conf() {
+  const { R2_CONTA, R2_CHAVE_ID, R2_CHAVE_SEGREDO, R2_BUCKET } = process.env;
+  if (!R2_CONTA || !R2_CHAVE_ID || !R2_CHAVE_SEGREDO || !R2_BUCKET) return null;
+  const chave = `${R2_CONTA}|${R2_CHAVE_ID}|${R2_BUCKET}`;
+  if (cache?.chave === chave) return cache;
+  const conta = R2_CONTA.trim().toLowerCase();
+  const bucket = R2_BUCKET.trim();
+  if (!/^[0-9a-f]{32}$/.test(conta) || !/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(bucket)) {
+    console.error('[r2] R2_CONTA (32 letras e números) ou R2_BUCKET em formato inesperado.');
+    return null;
+  }
+  cache = {
+    chave,
+    base: `https://${conta}.r2.cloudflarestorage.com/${bucket}`,
+    cli: new AwsClient({ accessKeyId: R2_CHAVE_ID.trim(), secretAccessKey: R2_CHAVE_SEGREDO.trim(), service: 's3', region: 'auto' }),
+  };
+  return cache;
 }
 
-/** Link assinado da prévia (foto grande ou vídeo de prévia). FASE 1: sem R2 → null. */
-export function linkDaPrevia(chave) {
-  return chave ? null : null;
+/** O R2 está configurado neste servidor? */
+export const r2Configurado = () => !!conf();
+
+const urlDe = (base, chave, consulta = {}) => {
+  const url = new URL(`${base}/${String(chave).split('/').map(encodeURIComponent).join('/')}`);
+  for (const [k, v] of Object.entries(consulta)) url.searchParams.set(k, v === '' ? '' : String(v));
+  return url;
+};
+const dataSigV4 = (seg) => new Date(seg * 1000).toISOString().replace(/[:-]|\.\d{3}/g, '');
+
+/**
+ * Link assinado para UMA operação num objeto. `janelaSeg` > 1 = link estável dentro da janela (para ver).
+ * @param {string} chave
+ * @param {{ metodo?: string, validadeSeg?: number, janelaSeg?: number, consulta?: Record<string, string | number>, agora?: number }} [o]
+ */
+export async function linkAssinado(chave, { metodo = 'GET', validadeSeg = 1200, janelaSeg = 600, consulta = {}, agora = Date.now() } = {}) {
+  const c = conf();
+  if (!c || !chave) return null;
+  const inicio = Math.floor(agora / 1000 / janelaSeg) * janelaSeg;
+  const url = urlDe(c.base, chave, { ...consulta, 'X-Amz-Expires': validadeSeg });
+  const r = await c.cli.sign(url.toString(), { method: metodo, aws: { signQuery: true, datetime: dataSigV4(inicio) } });
+  return r.url;
+}
+
+/** Link assinado da miniatura (320 px). */
+export const linkDaMiniatura = (chave) => linkAssinado(chave);
+/** Link assinado da prévia (foto grande). */
+export const linkDaPrevia = (chave) => linkAssinado(chave);
+
+// ── operações do servidor no R2 (envio em partes) ───────────────────────────────────────────────────────
+// Erro do R2 vira um erro com o código dele (ex.: NoSuchUpload) — nunca a resposta inteira na tela.
+async function r2(metodo, chave, { consulta = {}, corpo, cabecalhos } = {}) {
+  const c = conf();
+  if (!c) throw Object.assign(new Error('R2 não configurado.'), { status: 503, codigo: 'sem_r2' });
+  const resp = await c.cli.fetch(urlDe(c.base, chave, consulta).toString(), { method: metodo, body: corpo, headers: cabecalhos });
+  if (!resp.ok) {
+    const t = metodo === 'HEAD' ? '' : await resp.text().catch(() => '');
+    const codigo = /<Code>([^<]+)<\/Code>/.exec(t)?.[1] || `http_${resp.status}`;
+    throw Object.assign(new Error(`R2 ${metodo} recusou: ${codigo}`), { r2: codigo, statusR2: resp.status });
+  }
+  return resp;
+}
+const tag = (xml, nome) => new RegExp(`<${nome}>([^<]*)</${nome}>`).exec(xml)?.[1] ?? null;
+
+/** Começa um envio em partes. Devolve o UploadId. */
+export async function criarEnvioEmPartes(chave, mime) {
+  const xml = await (await r2('POST', chave, { consulta: { uploads: '' }, cabecalhos: { 'Content-Type': mime || 'application/octet-stream' } })).text();
+  const id = tag(xml, 'UploadId');
+  if (!id) throw new Error('R2 não devolveu o UploadId.');
+  return id;
+}
+
+/** Lê as partes de um ListParts (XML). Exportado para o teste. */
+export function lerListaDePartes(xml) {
+  const partes = [...String(xml).matchAll(/<Part>([\s\S]*?)<\/Part>/g)].map(([, p]) => ({
+    numero: Number(tag(p, 'PartNumber')), etag: (tag(p, 'ETag') || '').replace(/&quot;/g, '"'), tamanho: Number(tag(p, 'Size')),
+  }));
+  return { partes, truncado: tag(xml, 'IsTruncated') === 'true', proximo: tag(xml, 'NextPartNumberMarker') };
+}
+
+/** As partes que já chegaram ao R2 (para retomar). null = esse envio não existe mais (abortado ou vencido). */
+export async function partesEnviadas(chave, uploadId) {
+  const todas = [];
+  let marcador = null;
+  try {
+    for (let volta = 0; volta < 20; volta++) {
+      const consulta = { uploadId, 'max-parts': 1000, ...(marcador ? { 'part-number-marker': marcador } : {}) };
+      const lida = lerListaDePartes(await (await r2('GET', chave, { consulta })).text());
+      todas.push(...lida.partes);
+      if (!lida.truncado || !lida.proximo) break;
+      marcador = lida.proximo;
+    }
+  } catch (e) {
+    if (e?.r2 === 'NoSuchUpload') return null;
+    throw e;
+  }
+  return todas;
+}
+
+/** O XML do CompleteMultipartUpload. Exportado para o teste. */
+export function xmlDeConclusao(partes) {
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const etag = (e) => (e.startsWith('"') ? e : `"${e}"`);
+  return `<CompleteMultipartUpload>${partes.map((p) => `<Part><PartNumber>${p.numero}</PartNumber><ETag>${esc(etag(p.etag))}</ETag></Part>`).join('')}</CompleteMultipartUpload>`;
+}
+
+/** Junta as partes no objeto final. */
+export async function concluirEnvioEmPartes(chave, uploadId, partes) {
+  const resp = await r2('POST', chave, { consulta: { uploadId }, corpo: xmlDeConclusao(partes), cabecalhos: { 'Content-Type': 'application/xml' } });
+  const xml = await resp.text();
+  // O R2 pode responder 200 com <Error> no corpo (como o S3).
+  if (/<Error>/.test(xml)) throw Object.assign(new Error(`R2 recusou juntar as partes: ${tag(xml, 'Code')}`), { r2: tag(xml, 'Code') });
+}
+
+/** Desiste de um envio em partes (o que já subiu é descartado pelo R2). Envio que já não existe: ok. */
+export async function abortarEnvio(chave, uploadId) {
+  try { await r2('DELETE', chave, { consulta: { uploadId } }); } catch (e) { if (e?.r2 !== 'NoSuchUpload' && e?.statusR2 !== 404) throw e; }
+}
+
+/** Tamanho do objeto no R2 (bytes), ou null se não existe. */
+export async function tamanhoDoObjeto(chave) {
+  try {
+    const r = await r2('HEAD', chave);
+    return Number(r.headers.get('content-length'));
+  } catch (e) {
+    if (e?.statusR2 === 404) return null;
+    throw e;
+  }
 }

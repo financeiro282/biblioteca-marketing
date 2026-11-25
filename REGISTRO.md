@@ -11,6 +11,40 @@ Lucas Cerda — desde 2026-11-25 11:37 — criar e editar evento; depois a Fase 
 
 ## Histórico
 
+### 2026-11-25 — Lucas (com Claude) — FASE 2 (envio) pronta no modo demonstração — NÃO publicada
+- **O que mudou:**
+  - `compartilhado/envio.js`: regras do envio (um PUT até 32 MB; acima, partes de 16 MiB iguais, até 10.000; limite
+    de 100 GB; chaves no R2; leitura do pedido de início, dos dados e das partes).
+  - `api/_r2.js`: links assinados (aws4fetch), estáveis em janelas de 10 min para ver (o navegador reaproveita a
+    imagem), 15 min para enviar; envio em partes (criar, listar partes, juntar, abortar) e tamanho do objeto.
+  - `api/envio.js` (5ª função de 12): iniciar (duplicado pelo SHA-256 → 409 com o nome do evento; retomada do
+    mesmo arquivo "enviando" com as partes que já chegaram), assinar, concluir (confere no R2 que o arquivo chegou
+    INTEIRO antes de marcar "pronto"; log `arquivo.enviar`, com `toca_no_navegador` nos vídeos), cancelar.
+  - `src/envio/`: SHA-256 (nativo até 128 MB; acima, Worker com @noble/hashes), prévias (miniatura 320 px e foto
+    2048 px; HEIC por heic-to; RAW pela prévia embutida; vídeo: quadro de ~1 s, duração, data do "mvhd"), fila
+    (3 arquivos, 3 partes, novas tentativas, espera a internet voltar, link vencido → pede outro).
+  - `src/paginas/Enviar.tsx`: escolher evento, direito dos arquivos, autor; arrastar arquivos **ou pastas**.
+  - `eventos.js`/`arquivos.js`: links do R2 de verdade (assíncronos).
+  - **Busca:** o "_" e o "." passaram a ficar no texto buscado ("IMG_9001.JPG" não achava nada antes).
+  - Demonstração: `POST /envio` e um "R2" de mentira que só conta os bytes (arquivo com "queda" no nome falha
+    uma vez, para ver a retomada).
+- **Sem SQL novo.** Bibliotecas aprovadas: `aws4fetch`, `@noble/hashes`, `exifr`, `heic-to` (no navegador, só na tela
+  de envio; o heic-to, 3,2 MB, só quando aparece HEIC).
+- **Testes:** `npm test` 25/25 (regras, assinatura e XML do R2, API sem cookie, envio na demonstração com partes,
+  retomada e duplicado); `test:build` ok. Fotos do Edge (CDP), envio de verdade na demonstração: foto JPG (medidas e
+  miniatura), "vídeo" de 40 MB em 3 partes com queda simulada (retomou sozinho), .txt recusado, cópia com outro
+  nome → "já está no evento", arquivo aparece no evento, 390 px sem rolagem, console sem erro.
+- **⚠️ Achado:** pelo endereço do Portal vale SÓ o CSP do Portal (o da Biblioteca é substituído). O passo 4c
+  (`docs/PASSO-A-PASSO.md`) ganhou `media-src blob:` (capa de vídeo) e a decisão do HEIC (`worker-src blob:`).
+- **Cloudflare (Lucas, 25/11):** conta criada; bucket **`importek-biblioteca`** (o nome definitivo, mantido: o R2
+  não renomeia; os arquivos de teste ficam nele e são apagados antes da liberação); CORS só para o Portal; token só
+  deste bucket; `R2_CONTA`, `R2_CHAVE_ID`, `R2_CHAVE_SEGREDO`, `R2_BUCKET` na Vercel (Sensitive). Conta
+  `a973894994bed38bc82769a05155f14d`.
+- **CSP:** HEIC liberado pelo Lucas ("a, pode liberar"). Portal e Biblioteca com a conta R2 em img/media/connect e
+  `worker-src 'self' blob:` (teste do Portal 42 ok).
+- **Falta:** publicar (Biblioteca e Portal) e o teste de verdade: 300 fotos + vídeo de vários GB com a conexão
+  derrubada no meio.
+
 ### 2026-11-25 — Lucas (com Claude) — CRIAR E EDITAR EVENTO (adiantado da Fase 3)
 - **Decisões do Lucas (25/11, "pode sim"):** criar/editar evento antes do envio (o envio precisa de um evento);
   bibliotecas da Fase 2 aprovadas (`aws4fetch`, `@noble/hashes`, `exifr`, `heic-to`; justificativa no `docs/PLANO.md`).

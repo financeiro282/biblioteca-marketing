@@ -55,6 +55,8 @@ test('busca: sem acento e sem caracteres de comando; data dd/mm/aaaa; filtros in
   assert.equal(normalizar('Convenção SÃO Paulo'), 'convencao sao paulo');
   assert.equal(limparBusca('  palco, (abertura)*%  '), 'palco abertura');
   assert.equal(limparBusca('a'.repeat(300)).length, 100);
+  assert.equal(limparBusca('IMG_9001.JPG'), 'img_9001.jpg', 'busca pelo nome do arquivo');
+  assert.equal(limparBusca('50%\\'), '50');
   assert.equal(dataDaBusca('12/03/2026'), '2026-03-12');
   assert.equal(dataDaBusca('31/02/2026'), null);
   const f = lerFiltros(new URLSearchParams('q=Feira&tipo=video&ano=2026&direito=interno&aprovadas=1&pagina=2'));
@@ -107,4 +109,39 @@ test('evento: campos obrigatórios, direito escolhido sempre, limites do banco e
   assert.ok(direitoFicouMaisAberto('interno', 'liberado'));
   assert.equal(direitoFicouMaisAberto('liberado', 'interno'), false);
   assert.deepEqual(camposAlterados({ nome: 'a', tags: ['x'], local: null }, { nome: 'a', tags: ['x', 'y'], local: null }), ['tags']);
+});
+
+test('envio: um PUT até 32 MB; acima, partes de 16 MB iguais, nunca mais de 10.000; pedido de início conferido', async () => {
+  const E = await import('../compartilhado/envio.js');
+  const MiB = 1024 * 1024;
+  assert.equal(E.planoDeEnvio(32 * MiB).modo, 'simples');
+  const p = E.planoDeEnvio(32 * MiB + 1);
+  assert.deepEqual(p, { modo: 'partes', parte_bytes: 16 * MiB, total_partes: 3 });
+  for (const tam of [5 * 1024 * MiB, 100 * 1024 * MiB]) {
+    const x = E.planoDeEnvio(tam);
+    assert.ok(x.total_partes <= 10_000 && x.parte_bytes % MiB === 0 && x.parte_bytes >= 16 * MiB, String(tam));
+  }
+  assert.ok(E.tamanhoDaParte(200 * 1024 * MiB) > 16 * MiB, 'arquivo enorme: parte maior para caber em 10.000');
+  assert.deepEqual(E.faixaDaParte(3, 16 * MiB, 40 * MiB), { inicio: 32 * MiB, fim: 40 * MiB });
+  assert.equal(E.chaveOriginal('2026', 'a0000000-0000-4000-8000-000000000001', 'jpg'), 'originais/2026/a0000000-0000-4000-8000-000000000001.jpg');
+
+  const ok = { evento_id: 'e0000000-0000-4000-8000-000000000001', nome: 'IMG_1.JPG', tamanho: 10, sha256: 'A'.repeat(64) };
+  assert.deepEqual(E.lerInicio(ok).valores, { evento_id: ok.evento_id, nome_original: 'IMG_1.JPG', extensao: 'jpg', tipo: 'foto', mime: 'image/jpeg',
+    tamanho_bytes: 10, sha256: 'a'.repeat(64), direito_uso: 'liberado', autor: null });
+  assert.ok(E.lerInicio({ ...ok, nome: 'planilha.xlsx' }).erro.startsWith('Formato não aceito'));
+  assert.ok(E.lerInicio({ ...ok, tamanho: 0 }).erro);
+  assert.ok(E.lerInicio({ ...ok, tamanho: 101 * 1024 * MiB }).erro);
+  assert.ok(E.lerInicio({ ...ok, sha256: 'xyz' }).erro);
+  assert.ok(E.lerInicio({ ...ok, direito_uso: 'publico' }).erro);
+  assert.ok(E.lerInicio({ ...ok, evento_id: '1' }).erro);
+  assert.equal(E.lerInicio({ ...ok, direito_uso: 'sem_autorizacao' }).valores.direito_uso, 'sem_autorizacao');
+
+  const agora = Date.parse('2026-11-25T12:00:00Z');
+  assert.deepEqual(E.lerMetadados({ largura: 6000, altura: 4000.5, duracao_seg: 12.34567, capturado_em: '2026-11-20T10:00:00Z', camera: ' Canon   EOS ' }, agora),
+    { largura: 6000, altura: null, duracao_seg: 12.346, capturado_em: '2026-11-20T10:00:00.000Z', camera: 'Canon EOS' });
+  assert.equal(E.lerMetadados({ capturado_em: '1980-01-01' }, agora).capturado_em, null, 'data de câmera desacertada não vale');
+  assert.equal(E.lerMetadados({ capturado_em: '2027-01-01' }, agora).capturado_em, null, 'data no futuro não vale');
+  assert.deepEqual(E.lerPartes([{ numero: 2, etag: '"b"' }, { numero: 1, etag: '"a"' }], 2), [{ numero: 1, etag: '"a"' }, { numero: 2, etag: '"b"' }]);
+  assert.equal(E.lerPartes([{ numero: 1, etag: 'a' }, { numero: 3, etag: 'c' }], 2), null, 'buraco nas partes');
+  assert.equal(E.lerPartes([{ numero: 1, etag: 'a' }], 2), null, 'falta parte');
 });

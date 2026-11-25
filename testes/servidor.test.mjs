@@ -125,3 +125,47 @@ test('criar/alterar evento: só JSON, e sem cookie nem chega ao banco (401)', as
   await eventos({ method: 'DELETE', url: '/api/eventos', headers: {} }, res);
   assert.equal(res.codigo, 405);
 });
+
+test('R2: link assinado no formato de caminho, só da conta certa, estável na janela de 10 min', async () => {
+  const r2 = await import('../api/_r2.js');
+  const antes = { ...process.env };
+  Object.assign(process.env, { R2_CONTA: 'a'.repeat(32), R2_CHAVE_ID: 'id-de-teste', R2_CHAVE_SEGREDO: 'segredo-de-teste', R2_BUCKET: 'importek-biblioteca-teste' });
+  try {
+    const agora = Date.parse('2026-11-25T14:03:00Z');
+    const u = new URL(await r2.linkAssinado('miniaturas/2026/x.jpg', { agora }));
+    assert.equal(u.origin, `https://${'a'.repeat(32)}.r2.cloudflarestorage.com`);
+    assert.equal(u.pathname, '/importek-biblioteca-teste/miniaturas/2026/x.jpg');
+    assert.equal(u.searchParams.get('X-Amz-Expires'), '1200');
+    assert.equal(u.searchParams.get('X-Amz-Date'), '20261125T140000Z', 'hora arredondada para a janela');
+    assert.match(u.searchParams.get('X-Amz-Credential'), /^id-de-teste\/20261125\/auto\/s3\/aws4_request$/);
+    assert.match(u.searchParams.get('X-Amz-Signature'), /^[0-9a-f]{64}$/);
+    assert.equal(await r2.linkAssinado('miniaturas/2026/x.jpg', { agora: agora + 5 * 60_000 }), u.toString(), 'mesma janela = mesmo link');
+    const parte = new URL(await r2.linkAssinado('originais/2026/x.mp4', { metodo: 'PUT', janelaSeg: 1, validadeSeg: 900, consulta: { partNumber: 3, uploadId: 'abc' }, agora }));
+    assert.equal(parte.searchParams.get('partNumber'), '3');
+    assert.equal(parte.searchParams.get('X-Amz-Expires'), '900');
+    process.env.R2_CONTA = 'conta-invalida';
+    assert.equal(await r2.linkAssinado('x', { agora }), null, 'conta em formato errado: sem link');
+  } finally {
+    for (const k of ['R2_CONTA', 'R2_CHAVE_ID', 'R2_CHAVE_SEGREDO', 'R2_BUCKET']) { if (antes[k] === undefined) delete process.env[k]; else process.env[k] = antes[k]; }
+  }
+  assert.equal(await r2.linkDaMiniatura('miniaturas/2026/x.jpg'), null, 'sem R2 configurado: null');
+  const xml = '<ListPartsResult><IsTruncated>true</IsTruncated><NextPartNumberMarker>2</NextPartNumberMarker>'
+    + '<Part><PartNumber>1</PartNumber><ETag>&quot;e1&quot;</ETag><Size>16777216</Size></Part>'
+    + '<Part><PartNumber>2</PartNumber><ETag>"e2"</ETag><Size>100</Size></Part></ListPartsResult>';
+  assert.deepEqual(r2.lerListaDePartes(xml), { partes: [{ numero: 1, etag: '"e1"', tamanho: 16777216 }, { numero: 2, etag: '"e2"', tamanho: 100 }], truncado: true, proximo: '2' });
+  assert.equal(r2.xmlDeConclusao([{ numero: 1, etag: 'a' }, { numero: 2, etag: '"b"' }]),
+    '<CompleteMultipartUpload><Part><PartNumber>1</PartNumber><ETag>"a"</ETag></Part><Part><PartNumber>2</PartNumber><ETag>"b"</ETag></Part></CompleteMultipartUpload>');
+});
+
+test('envio: só POST com JSON, e sem cookie nem chega ao banco ou ao R2', async () => {
+  const envio = (await import('../api/envio.js')).default;
+  let res = resposta();
+  await envio({ method: 'GET', url: '/api/envio', headers: {} }, res);
+  assert.equal(res.codigo, 405);
+  res = resposta();
+  await envio({ method: 'POST', url: '/api/envio', headers: { 'content-type': 'text/plain' }, body: 'x' }, res);
+  assert.equal(res.codigo, 415);
+  res = resposta();
+  await envio({ method: 'POST', url: '/api/envio', headers: { 'content-type': 'application/json' }, body: { acao: 'iniciar' } }, res);
+  assert.equal(res.codigo, 401);
+});

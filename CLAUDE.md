@@ -32,7 +32,9 @@ Vale também o `CLAUDE.md` da pasta de cima (`Projetos de IA`): leia-o antes. Le
 
 ## Endereço único
 - **Onde mora:** o site em `/biblioteca/` (Vite `base`, `BrowserRouter basename`) e a API em `/biblioteca/api` (o cookie só vai para ela).
-- **Portal:** o `vercel.json` do Portal repassa `/biblioteca*`. O **CSP do Portal** precisa do endereço do R2 (Fase 2, com o Leo).
+- **Portal:** o `vercel.json` do Portal repassa `/biblioteca*`. **Pelo endereço do Portal vale SÓ o CSP do Portal**
+  (o da Biblioteca é substituído): ele libera a conta R2 da Biblioteca (img, media, connect) e `worker-src blob:`
+  (HEIC), desde 25/11/2026. Mudou algo que o navegador busca fora? Muda o CSP do Portal **e** o daqui.
 
 ## Modo demonstração
 - **Onde vale:** só no `npm run dev` (`demo/`, carregado com `import()` só no "serve"). **Nada da demonstração em `src/`.**

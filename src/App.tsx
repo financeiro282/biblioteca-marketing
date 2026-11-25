@@ -12,6 +12,7 @@ import EventoFormulario from "./paginas/EventoFormulario";
 import Arquivos from "./paginas/Arquivos";
 import Arquivo from "./paginas/Arquivo";
 import EmBreve from "./paginas/EmBreve";
+import Enviar from "./paginas/Enviar";
 
 // ── Contexto: quem está aqui e o aviso flutuante ──
 type Ctx = { eu: Eu; avisar: (msg: string) => void };
@@ -103,12 +104,7 @@ function Protegido() {
             "Zips pedidos (um ou vários arquivos), gerados em segundo plano.",
             "Aviso pelo Portal (sininho e notificação) quando o zip ficar pronto. Cada zip fica 7 dias.",
           ]} />} />
-          <Route path="/enviar" element={<ComPermissao permissao="enviar"><EmBreve titulo="Enviar arquivos" fase={2} itens={[
-            "Arrastar e soltar centenas de fotos ou vídeos grandes de uma vez.",
-            "Envio direto para o armazenamento, em partes, com progresso e retomada se a conexão cair.",
-            "Aviso de arquivo já enviado (duplicado) e de que fechar a aba interrompe o envio.",
-            "Miniatura, data de captura e prévia de HEIC geradas no envio.",
-          ]} /></ComPermissao>} />
+          <Route path="/enviar" element={<ComPermissao permissao="enviar"><Enviar /></ComPermissao>} />
           <Route path="/links" element={<ComPermissao permissao="compartilhar"><EmBreve titulo="Links externos" fase={4} itens={[
             "Link para agência ou imprensa com validade (até 90 dias), senha opcional e revogação.",
             "Só arquivos com uso liberado. Toda abertura e download registrados no log.",

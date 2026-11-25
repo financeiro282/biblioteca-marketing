@@ -22,14 +22,48 @@ Não precisa de conta nenhuma. Os dados são fictícios e não há banco, R2 nem
 
 ## Fase 2: armazenamento de teste e primeira publicação
 
-Os passos detalhados vêm com a Fase 2. O que será preciso:
-
-1. **Cloudflare (Lucas):**
-   - criar a conta e ativar o R2 (pede cartão);
-   - criar o bucket **privado** `importek-biblioteca-teste`, sem domínio público e sem r2.dev;
-   - configurar o CORS só para o endereço do Portal, com `ETag` exposto;
-   - criar um token do R2 **só para esse bucket** (leitura e escrita).
-   - O Claude manda o JSON do CORS e a lista de cliques.
+1. **Cloudflare (Lucas).** Os nomes dos menus podem variar um pouco; o que importa está em negrito.
+   1. **Conta:** em `dash.cloudflare.com`, criar a conta (sugestão: um e-mail da empresa que não dependa de uma
+      pessoa só) e confirmar o e-mail. Ligar a verificação em duas etapas (Profile → Authentication).
+   2. **Ativar o R2:** menu **R2 Object Storage** → ativar o plano. Pede cartão; a cobrança só começa acima de
+      10 GB guardados por mês (o teste fica dentro disso).
+   3. **Alerta de cobrança:** Billing → **Billing notifications** → aviso a partir de US$ 5.
+   4. **Bucket:** R2 → **Create bucket**
+      - nome: **`importek-biblioteca`** (criado assim em 25/11/2026 e mantido: é o definitivo; o R2 não renomeia
+        bucket). Os arquivos dos testes ficam nele e são apagados antes da liberação (Fase 6);
+      - Location: **Automatic**; Default storage class: **Standard** → Create.
+   5. **Fechado ao público:** no bucket → **Settings**
+      - **Public Development URL (r2.dev): Disabled** (já vem assim; conferir);
+      - **Custom Domains:** nenhum;
+      - **Object lifecycle rules:** conferir que existe a regra de **abortar envios em partes incompletos em
+        7 dias** (o R2 cria por padrão). Se não existir, criar.
+   6. **CORS:** no bucket → Settings → **CORS Policy** → Add / Edit → colar exatamente isto → Save:
+      ```json
+      [
+        {
+          "AllowedOrigins": ["https://portal-importek.vercel.app"],
+          "AllowedMethods": ["GET", "PUT", "HEAD"],
+          "AllowedHeaders": ["content-type"],
+          "ExposeHeaders": ["ETag"],
+          "MaxAgeSeconds": 3600
+        }
+      ]
+      ```
+      Só o endereço do Portal: nenhum outro site consegue enviar para o bucket pelo navegador. O `ETag` exposto é o
+      que permite juntar as partes de um vídeo grande no fim do envio.
+   7. **Token só deste bucket:** R2 → **Manage API tokens** → **Create API token**
+      - Permissions: **Object Read & Write**;
+      - Specify bucket(s): **só `importek-biblioteca`**;
+      - TTL: Forever → Create.
+      - A tela mostra **uma vez só** o Access Key ID, o Secret Access Key e o endereço
+        `https://<ID da conta>.r2.cloudflarestorage.com`. Não fechar antes do passo 8.
+   8. **Vercel** → `biblioteca-marketing` → Settings → Environment Variables (só Production, **Sensitive**):
+      - `R2_CONTA` = o ID da conta (o trecho antes de `.r2.cloudflarestorage.com`);
+      - `R2_CHAVE_ID` = Access Key ID;
+      - `R2_CHAVE_SEGREDO` = Secret Access Key;
+      - `R2_BUCKET` = `importek-biblioteca`.
+      - ⚠️ As chaves vão **só** para a Vercel: nunca no chat, em arquivo, no e-mail ou na pasta de rede.
+   9. **Avisar o Claude do ID da conta** (não é segredo: ele aparece no endereço e entra no CSP do Portal, passo 4c).
 2. **Vercel (Lucas):** projeto novo `biblioteca-marketing`, região São Paulo.
    - Variáveis, todas só em Production e marcadas como Sensitive:
 
@@ -110,14 +144,19 @@ Marketing" viraria `biblioteca-de-marketing`. O sistema espera `biblioteca`. Por
    - marcar **Mostrar no Portal**;
    - liberar o acesso só para quem vai testar.
 
-### 4c. CSP do Portal (junto com a publicação da Fase 2; precisa do ID da conta Cloudflare)
+### 4c. CSP do Portal — FEITO em 25/11/2026 (conta `a973894994bed38bc82769a05155f14d`, HEIC liberado pelo Lucas)
 
-O CSP do Portal também vale para as páginas da biblioteca, porque elas abrem no endereço dele. Sem esta mudança,
-as miniaturas, o vídeo e o envio para o R2 são bloqueados pelo navegador. Em `P:\portal-importek\vercel.json`,
-no valor do `Content-Security-Policy`, trocar `<ID>` pelo ID da conta Cloudflare (fica no painel do R2):
+⚠️ **Pelo endereço do Portal, vale SÓ o CSP do Portal** (conferido em 25/11/2026: o cabeçalho da Biblioteca é
+substituído pelo do Portal). Sem esta mudança, o navegador bloqueia as miniaturas, o vídeo, a capa de vídeo
+(gerada de um `blob:`) e o envio para o R2. Em `P:\portal-importek\vercel.json`, no valor do
+`Content-Security-Policy`, trocar `<ID>` pelo ID da conta Cloudflare (fica no painel do R2):
 
 - **Antes:** `img-src 'self' data: blob: https://dsdvolzjuxibhppvhjzf.supabase.co; connect-src 'self' https://dsdvolzjuxibhppvhjzf.supabase.co wss://dsdvolzjuxibhppvhjzf.supabase.co;`
 - **Depois:** `img-src 'self' data: blob: https://dsdvolzjuxibhppvhjzf.supabase.co https://<ID>.r2.cloudflarestorage.com; media-src 'self' blob: https://<ID>.r2.cloudflarestorage.com; connect-src 'self' https://dsdvolzjuxibhppvhjzf.supabase.co wss://dsdvolzjuxibhppvhjzf.supabase.co https://<ID>.r2.cloudflarestorage.com;`
+- **HEIC (decisão do Lucas, pendente):** o conversor (`heic-to`) roda num Worker criado de um `blob:`. Para ter
+  prévia de HEIC, trocar também `worker-src 'self'` por `worker-src 'self' blob:`. Sem isso, o HEIC sobe normalmente
+  (o original vai sempre), só que sem prévia, como o RAW. O `blob:` no worker só roda código que a própria página
+  criou: não abre a porta para script de outro site.
 
 Só o endereço da conta, nunca `*.r2.cloudflarestorage.com` (isso liberaria o bucket de qualquer pessoa). O código
 da biblioteca usa links no formato `https://<ID>.r2.cloudflarestorage.com/<bucket>/…`. Se a Fase 2 precisar de
@@ -125,7 +164,8 @@ mais alguma coisa no CSP, isso vem escrito aqui antes da publicação.
 
 ## Fase 6: produção e cópia de segurança
 
-1. **Cloudflare:** bucket definitivo `importek-biblioteca`.
+1. **Cloudflare:** o bucket `importek-biblioteca` (já criado em 25/11/2026). **Antes de liberar: apagar os eventos e
+   os arquivos de teste** (banco e R2).
    - Regra de ciclo de vida: abortar envio incompleto em 7 dias e apagar `zips/` em 7 dias.
    - Alerta de cobrança da conta.
 2. **Backblaze (Lucas):**

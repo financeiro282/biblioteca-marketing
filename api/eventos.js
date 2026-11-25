@@ -12,14 +12,14 @@
 
 import { ehUuid, lerFiltros } from '../compartilhado/busca.js';
 import { camposAlterados, lerEvento } from '../compartilhado/evento.js';
-import { erro, exigirJson, exigirPermissao, exigirSessao, lerCorpo, parametros, responder, responderErro } from './_comum.js';
+import { erro, exigirJson, exigirPermissao, exigirSessao, lerCorpo, parametros, registrarAcao, responder, responderErro } from './_comum.js';
 import { linkDaMiniatura } from './_r2.js';
 
-export function eventoParaTela(e) {
+export async function eventoParaTela(e) {
   return {
     id: e.id, nome: e.nome, data_evento: e.data_evento, local: e.local, descricao: e.descricao, tags: e.tags ?? [],
     responsavel: e.responsavel, direito_uso: e.direito_uso,
-    capa_url: linkDaMiniatura(e.capa_miniatura),
+    capa_url: await linkDaMiniatura(e.capa_miniatura),
     total_arquivos: Number(e.total_arquivos) || 0, total_bytes: Number(e.total_bytes) || 0,
     fotos: Number(e.fotos) || 0, videos: Number(e.videos) || 0, raws: Number(e.raws) || 0,
   };
@@ -27,14 +27,8 @@ export function eventoParaTela(e) {
 
 const CAMPOS = 'id, nome, data_evento, local, descricao, tags, responsavel, direito_uso, versao';
 
-// Log de ações (Fase 5 mostra): em nome de quem chama (a política log_incluir confere e-mail e perfil). O log nunca
-// desfaz o que já foi gravado: se falhar, fica a linha no log da Vercel.
-async function registrar(sb, eu, acao, alvoId, detalhes) {
-  const { error } = await sb.from('log_acoes').insert({
-    email: eu.email, nome: eu.nome, perfil: eu.perfil, acao, alvo_tipo: 'evento', alvo_id: alvoId, detalhes,
-  });
-  if (error) console.error(`[eventos] log ${acao} não gravado:`, error.message);
-}
+// Log de ações (a Fase 5 mostra): api/_comum.js → registrarAcao.
+const registrar = (sb, eu, acao, alvoId, detalhes) => registrarAcao(sb, eu, acao, 'evento', alvoId, detalhes);
 
 const invalido = (erros) => Object.assign(erro(400, 'Confira os campos marcados.', 'campos'), { erros });
 
@@ -97,18 +91,19 @@ export default async function handler(req, res) {
       p_q: f.q ?? null, p_data: f.data ?? null, p_ano: f.ano ?? null, p_direito: f.direito ?? null,
     });
     if (error) throw error;
-    const eventos = (data ?? []).map(eventoParaTela);
+    const linhas = data ?? [];
 
     const id = p.get('id');
     if (id !== null) {
-      const evento = eventos.find((e) => e.id === String(id).toLowerCase());
-      if (!evento) throw erro(404, 'Evento não encontrado.', 'nao_encontrado');
+      const linha = linhas.find((e) => e.id === String(id).toLowerCase());
+      if (!linha) throw erro(404, 'Evento não encontrado.', 'nao_encontrado');
+      const evento = await eventoParaTela(linha);
       // A versão vem da tabela (mesmo RLS), para o "Editar evento" saber se alguém salvou no meio.
       const { data: v, error: ev } = await sb.from('eventos').select('versao').eq('id', evento.id).maybeSingle();
       if (ev) throw ev;
       return responder(res, 200, { evento: { ...evento, versao: v?.versao ?? 1 } });
     }
-    return responder(res, 200, { eventos });
+    return responder(res, 200, { eventos: await Promise.all(linhas.map(eventoParaTela)) });
   } catch (e) {
     if (e?.erros) return responder(res, e.status, { erro: e.message, codigo: e.codigo, erros: e.erros });
     return responderErro(res, e, 'eventos');
