@@ -6,8 +6,8 @@ Cada linha diz em que fase passa a valer. ✅ = já provado (data e como).
 
 | O quê | Como | Situação |
 |---|---|---|
-| Banco: RLS, sessões, lixeira, busca, desfazer; zip e link externo (SQL 02) | `importek-sistemas/scripts/testa-banco-biblioteca.mjs` (PGlite, ver o LEIA-ME do banco) | ✅ 188/188 em 24/11 · ✅ 269/269 com o 02 em 25/11 |
-| Regras compartilhadas, servidor sem banco, modo demonstração (o zip é aberto pelo `tar` do Windows no teste) | `npm test` na pasta local | ✅ 17/17 em 24/11 · ✅ 40/40 em 25/11 |
+| Banco: RLS, sessões, lixeira, busca, desfazer; zip e link externo (SQL 02) | `importek-sistemas/scripts/testa-banco-biblioteca.mjs` (PGlite, ver o LEIA-ME do banco) | ✅ 188/188 em 24/11 · ✅ 269/269 com o 02 · ✅ 311/311 com o 03 em 25/11 |
+| Regras compartilhadas, servidor sem banco, modo demonstração (o zip é aberto pelo `tar` do Windows no teste) | `npm test` na pasta local | ✅ 17/17 em 24/11 · ✅ 47/47 em 25/11 |
 | Tipos, build e nada da demonstração no build | `npm run test:build` | ✅ 24/11 |
 | Cópia do padrão visual intacta | `node padrao-visual/conferir.mjs` | ✅ 24/11 |
 
@@ -20,7 +20,7 @@ Cada linha diz em que fase passa a valer. ✅ = já provado (data e como).
 | 3 | Colaborador não vê "Sem autorização", nem pela API | com perfil Colaborador: o evento "Sem autorização" não aparece; abrir o endereço de um arquivo sem autorização → "não encontrado". Pela API: `GET /biblioteca/api/arquivos?id=<id>` → 404. No banco: PGlite seção 6 | ✅ banco e demonstração · 2 em produção |
 | 4 | Link externo expira e pode ser revogado | criar link de 1 dia; mudar a validade no banco para o passado → página do link diz "expirado"; criar outro e revogar → "revogado". No banco: PGlite seção 10d (validade, revogação, senha, direito a cada acesso) | ✅ banco e demonstração · 4 em produção |
 | 4b | Zip em segundo plano | pedir o zip de um evento; fechar a página; chega o aviso no Portal; baixar em Meus downloads e abrir no Windows. Arquivo acima de 1 GB fica fora (baixar direto). No banco: PGlite seção 10c (partes, retomada, 3 tentativas) | ✅ banco e demonstração · 4 em produção |
-| 5 | Arquivo excluído vai para a lixeira e pode ser restaurado | Marketing exclui → some para todos; Administrador vê na lixeira e restaura → volta. No banco: PGlite seção 8 | ✅ banco · 3/5 nas telas |
-| 6 | Painel de uso bate com o espaço real | comparar o total do painel com o tamanho do bucket no painel do Cloudflare (R2 → bucket → Metrics) | 5 |
+| 5 | Arquivo excluído vai para a lixeira e pode ser restaurado | Marketing exclui → some para todos; Administrador vê na lixeira e restaura → volta; "Apagar de vez" e os 30 dias (PGlite seção 10e). No banco: PGlite seção 8 | ✅ banco e demonstração · 5 em produção |
+| 6 | Painel de uso bate com o espaço real | "Medir agora" no painel; comparar o "Armazenamento real" com o tamanho do bucket no Cloudflare (R2 → bucket → Metrics) | ✅ demonstração · 5 em produção |
 | 7 | RLS: sem sessão, nada é lido | PGlite seção 5 (10 tabelas, 0 linhas; nada é gravado) e, em produção, chamada da API sem cookie → 401 | ✅ banco · 2 em produção |
 | 8 | Restaurar da cópia de segurança | baixar um arquivo do B2 e comparar o SHA-256 com o do banco | 6 |

@@ -22,6 +22,9 @@ import {
 import {
   disposicao, formatoDoCodigo, lerLink, lerPedidoZip, nomeDoZip, nomesNoZip, planoDoZip, situacaoDoLink, ZIPS_ATIVOS_POR_PESSOA, zipParaTela,
 } from '../compartilhado/download.js';
+import {
+  ACOES_DO_LOG, apagaEm, csvDoLog, custoMensal, LOG_MAX_CSV, LOG_POR_PAGINA, lerConfig, lerFiltrosDoLog,
+} from '../compartilhado/controle.js';
 import { pode } from '../compartilhado/perfis.js';
 import { montarZip } from '../api/_zip.js';
 import { arquivoVisivel, eventoVisivel, paraConsulta } from '../compartilhado/visibilidade.js';
@@ -438,6 +441,126 @@ async function baixarFicticio(req, res) {
   return res.end(Buffer.concat(blocos));
 }
 
+// ── Fase 5: lixeira, painel de uso e log (como api/controle.js) ─────────────────────────────────────────
+// Lixeira: os arquivos da demonstração que estão nela (3 já vêm de exemplo). Uso: calculado dos dados fictícios, com
+// um histórico inventado. Log: ações fictícias (pessoas "(exemplo)"), com os mesmos filtros e o mesmo CSV.
+const CONFIG_DEMO = { limites_alerta_gb: [1000, 2000], preco_principal_gb: 0.015, gratis_principal_gb: 10, preco_copia_gb: 0.00695, gratis_copia_gb: 10, atualizado_em: null, atualizado_por_nome: null };
+const PESSOAS_LOG = [['Ana Marketing (exemplo)', 'ana@exemplo.invalid', 'marketing'], ['Bruno Colaborador (exemplo)', 'bruno@exemplo.invalid', 'colaborador'], ['Carla Administradora (exemplo)', 'carla@exemplo.invalid', 'admin']];
+const LOG_DEMO = (() => {
+  const acoes = Object.keys(ACOES_DO_LOG);
+  const lista = [];
+  for (let i = 0; i < 140; i++) {
+    const acao = acoes[(i * 7) % acoes.length];
+    const visitante = acao.startsWith('link.') && acao !== 'link.criar' && acao !== 'link.revogar';
+    const rotina = acao.endsWith('_auto');
+    const [nome, email, perfil] = PESSOAS_LOG[i % PESSOAS_LOG.length];
+    const a = D.ARQUIVOS[(i * 5) % D.ARQUIVOS.length];
+    lista.push({
+      id: 140 - i, em: new Date(Date.parse('2026-11-25T18:00:00Z') - i * 3 * 3600_000).toISOString(),
+      email: visitante || rotina ? null : email, nome: visitante || rotina ? null : nome, perfil: visitante || rotina ? null : perfil,
+      acao, alvo_tipo: acao.split('.')[0], alvo_id: a.id, detalhes: { nome: a.nome_original }, ip: visitante ? '200.0.2.10' : null,
+    });
+  }
+  return lista;
+})();
+const naLixeiraDemo = (a) => !!a.excluido_em || !!POR_EVENTO.get(a.evento_id)?.excluido_em;
+
+function lixeiraDemo() {
+  const eventos = D.EVENTOS.filter((e) => e.excluido_em).map((e) => {
+    const dele = D.ARQUIVOS.filter((a) => a.evento_id === e.id);
+    return { id: e.id, nome: e.nome, data_evento: e.data_evento, excluido_em: e.excluido_em, excluido_por_nome: e.excluido_por_nome ?? D.PESSOA.nome,
+      apaga_em: apagaEm(e.excluido_em), arquivos: dele.length, bytes: dele.reduce((s, a) => s + a.tamanho_bytes, 0) };
+  });
+  const arquivos = D.ARQUIVOS.filter((a) => a.excluido_em && !POR_EVENTO.get(a.evento_id)?.excluido_em)
+    .sort((x, y) => y.excluido_em.localeCompare(x.excluido_em))
+    .map((a) => ({ id: a.id, evento_id: a.evento_id, evento_nome: POR_EVENTO.get(a.evento_id).nome, tipo: a.tipo, nome_original: a.nome_original,
+      extensao: a.extensao, tamanho_bytes: a.tamanho_bytes, excluido_em: a.excluido_em, excluido_por_nome: a.excluido_por_nome ?? D.PESSOA.nome,
+      apaga_em: apagaEm(a.excluido_em), miniatura_url: a.tem_miniatura ? `${IMG}/${a.id}.svg` : null }));
+  return [200, { eventos, arquivos }];
+}
+
+function usoDemo() {
+  const prontos = D.ARQUIVOS.filter((a) => a.situacao === 'pronto');
+  const bytes = prontos.reduce((s, a) => s + a.tamanho_bytes, 0);
+  const porTipo = {};
+  for (const a of prontos) porTipo[a.tipo] = (porTipo[a.tipo] ?? 0) + a.tamanho_bytes;
+  const r2 = Math.round(bytes * 1.03);
+  const hojeDia = new Date(relogio.agora() - 3 * 3600_000).toISOString().slice(0, 10);
+  const historico = Array.from({ length: 30 }, (_, i) => ({
+    dia: new Date(Date.parse(hojeDia) - (29 - i) * 86_400_000).toISOString().slice(0, 10), bytes: Math.round(r2 * (0.6 + 0.4 * (i / 29))),
+  }));
+  const meses = new Map();
+  for (const a of prontos.filter((x) => !naLixeiraDemo(x))) {
+    const m = `${a.capturado_em.slice(0, 7)}-01`;
+    const v = meses.get(m) ?? { mes: m, arquivos: 0, bytes: 0 };
+    v.arquivos++; v.bytes += a.tamanho_bytes; meses.set(m, v);
+  }
+  return [200, {
+    hoje: { dia: hojeDia, bytes_banco: bytes, arquivos_banco: prontos.length, bytes_lixeira: prontos.filter(naLixeiraDemo).reduce((s, a) => s + a.tamanho_bytes, 0),
+      bytes_r2: r2, objetos_r2: prontos.length * 3, por_tipo: porTipo, registrado_em: new Date(relogio.agora()).toISOString() },
+    historico, por_mes: [...meses.values()].sort((x, y) => x.mes.localeCompare(y.mes)),
+    maiores: listarEventos('admin', { pagina: 1 }).map((e) => ({ id: e.id, nome: e.nome, data_evento: e.data_evento, arquivos: e.total_arquivos, bytes: e.total_bytes }))
+      .sort((x, y) => y.bytes - x.bytes).slice(0, 15),
+    alertas: [], config: CONFIG_DEMO, custo: custoMensal(r2, CONFIG_DEMO), pode_configurar: estado.perfil === 'admin',
+  }];
+}
+
+function logDemo(p) {
+  const f = lerFiltrosDoLog(p);
+  const linhas = LOG_DEMO.filter((l) => (!f.acao || (f.acao.endsWith('.') ? l.acao.startsWith(f.acao) : l.acao === f.acao))
+    && (!f.pessoa || `${l.nome ?? ''} ${l.email ?? ''}`.toLowerCase().includes(f.pessoa.toLowerCase()))
+    && (!f.de || l.em >= `${f.de}T03:00:00.000Z`) && (!f.ate || l.em < new Date(Date.parse(`${f.ate}T03:00:00.000Z`) + 86_400_000).toISOString()));
+  if (p.get('csv')) return [200, { __arquivo: { tipo: 'text/csv; charset=utf-8', nome: 'log-biblioteca-demonstracao.csv', corpo: csvDoLog(linhas.slice(0, LOG_MAX_CSV)) } }];
+  return [200, { linhas: linhas.slice((f.pagina - 1) * LOG_POR_PAGINA, f.pagina * LOG_POR_PAGINA), total: linhas.length, pagina: f.pagina, por_pagina: LOG_POR_PAGINA }];
+}
+
+function controleDemo(corpo) {
+  const sem = (perm) => (!pode(estado.perfil, perm) ? [403, { erro: 'Seu perfil não permite isto.', codigo: 'sem_permissao' }] : null);
+  const ids = () => (Array.isArray(corpo.ids) ? corpo.ids.map((x) => String(x).toLowerCase()) : []);
+  switch (corpo.acao) {
+    case 'restaurar': {
+      if (sem('lixeira')) return sem('lixeira');
+      let n = 0;
+      for (const a of D.ARQUIVOS) if (ids().includes(a.id) && a.excluido_em) { a.excluido_em = null; n++; }
+      return [200, { restaurados: n }];
+    }
+    case 'restaurar_evento': {
+      if (sem('lixeira')) return sem('lixeira');
+      const e = POR_EVENTO.get(String(corpo.id ?? '').toLowerCase());
+      if (!e?.excluido_em) return [404, { erro: 'Evento não está na lixeira.', codigo: 'nao_encontrado' }];
+      e.excluido_em = null;
+      return [200, { ok: true }];
+    }
+    case 'apagar': {
+      if (sem('lixeira')) return sem('lixeira');
+      const alvo = new Set(D.ARQUIVOS.filter((a) => ids().includes(a.id) && naLixeiraDemo(a)).map((a) => a.id));
+      for (let i = D.ARQUIVOS.length - 1; i >= 0; i--) if (alvo.has(D.ARQUIVOS[i].id)) D.ARQUIVOS.splice(i, 1);
+      return [200, { apagados: alvo.size, falharam: 0 }];
+    }
+    case 'apagar_evento': {
+      if (sem('lixeira')) return sem('lixeira');
+      const e = POR_EVENTO.get(String(corpo.id ?? '').toLowerCase());
+      if (!e?.excluido_em) return [404, { erro: 'Evento não está na lixeira.', codigo: 'nao_encontrado' }];
+      let n = 0;
+      for (let i = D.ARQUIVOS.length - 1; i >= 0; i--) if (D.ARQUIVOS[i].evento_id === e.id) { D.ARQUIVOS.splice(i, 1); n++; }
+      D.EVENTOS.splice(D.EVENTOS.indexOf(e), 1);
+      POR_EVENTO.delete(e.id);
+      return [200, { apagado: true, arquivos: n }];
+    }
+    case 'medir_uso':
+      return sem('configurar') ?? [200, { ok: true, bytes_total: usoDemo()[1].hoje.bytes_r2 }];
+    case 'config': {
+      if (sem('configurar')) return sem('configurar');
+      const r = lerConfig(corpo);
+      if (r.erros) return [400, { erro: 'Confira os campos marcados.', codigo: 'campos', erros: r.erros }];
+      Object.assign(CONFIG_DEMO, r.valores, { atualizado_em: new Date().toISOString(), atualizado_por_nome: D.PESSOA.nome });
+      return [200, { ok: true }];
+    }
+    default:
+      return [400, { erro: 'Ação desconhecida.' }];
+  }
+}
+
 // Rotas /api fictícias: 'MÉTODO /caminho' → (params, corpo) => [status, resposta]
 const ROTAS = {
   'GET /sessao': () => (estado.saiu ? SEM_SESSAO : [200, { ...D.PESSOA, perfil: estado.perfil }]),
@@ -565,6 +688,16 @@ const ROTAS = {
     }
     return [400, { erro: 'Ação desconhecida.' }];
   },
+  // Fase 5 (como api/controle.js).
+  'GET /controle': (p) => {
+    if (estado.saiu) return SEM_SESSAO;
+    const rota = p.get('rota');
+    const perm = { lixeira: 'lixeira', uso: 'ver_uso', log: 'relatorios' }[rota];
+    if (!perm) return [404, { erro: 'Rota desconhecida.' }];
+    if (!pode(estado.perfil, perm)) return [403, { erro: 'Seu perfil não permite isto.', codigo: 'sem_permissao' }];
+    return rota === 'lixeira' ? lixeiraDemo() : rota === 'uso' ? usoDemo() : logDemo(p);
+  },
+  'POST /controle': (_p, corpo) => (estado.saiu ? SEM_SESSAO : controleDemo(corpo)),
   // A página do link (visitante): sem sessão, vale o código.
   'POST /externo': (_p, corpo) => externoDemo(corpo),
   'POST /__demo/perfil': (_p, corpo) => {
@@ -665,6 +798,12 @@ export default function pluginDemo() {
         (async () => {
           const corpo = req.method === 'GET' ? {} : await lerCorpo(req);
           const [status, resposta] = responderDemo(req.method, req.url, corpo);
+          if (resposta?.__arquivo) {   // CSV do log
+            res.statusCode = status;
+            res.setHeader('Content-Type', resposta.__arquivo.tipo);
+            res.setHeader('Content-Disposition', `attachment; filename="${resposta.__arquivo.nome}"`);
+            return res.end(resposta.__arquivo.corpo);
+          }
           json(res, status, resposta);
         })().catch((e) => json(res, 500, { erro: String(e?.message || e) }));
       });

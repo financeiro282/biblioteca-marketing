@@ -5,11 +5,42 @@
 
 ## EM USO AGORA
 
-Lucas Cerda — desde 2026-11-25 11:37 — Fase 4 no ar e testada; próximo: Fase 5
+Lucas Cerda — desde 2026-11-25 11:37 — Fase 5 publicada; aguarda o SQL 03 (se ainda não rodou) e o teste no ar
 
 <!-- Formato: Nome — desde AAAA-MM-DD HH:MM — o que vai fazer -->
 
 ## Histórico
+
+### 2026-11-25 — Lucas (com Claude) — FASE 5 (lixeira, painel de uso e log) — PUBLICADA (commit e push)
+- **Pedido do Lucas:** "sim, pode fazer" (commits pendentes e seguir para a Fase 5); depois "pode fazer o commit e push".
+- **Depende de:**
+  - SQL 03 revisado pelo Leo e rodado pelo Lucas, com backup. Até ele rodar, só as partes novas falham
+    (apagar de vez, crescimento por mês, medição e a lixeira vencida da rotina das 8h, que registra o erro e segue);
+    o resto do sistema não muda.
+  - Passo a passo: `docs/PASSO-A-PASSO.md`, "Fase 5".
+- **Banco (`importek-sistemas/banco/biblioteca/03-lixeira-e-uso.sql` + `03-desfazer.sql`):** só acrescenta 6 funções.
+  - Apagar de vez: só o Administrador, e só o que está na lixeira.
+  - Rotina: só o que está na lixeira há 30 dias ou mais (mínimo 30, conferido no banco).
+  - Uso do dia, alertas (uma vez por limite) e crescimento por mês.
+  - PGlite **311/311** (+42).
+- **Servidor (9 de 12 funções):**
+  - `api/controle.js`: lixeira, uso, log com CSV e configuração;
+  - `api/_rotina.js`: a rotina diária do cron das 8h. Faz os zips parados, a lixeira vencida (R2 primeiro, banco depois), o uso (soma real do bucket) e o aviso aos Administradores pelo Portal quando passa um limite;
+  - "Medir agora" para o Administrador.
+- **Telas:**
+  - Lixeira (Administrador): restaurar; apagar de vez com "Entendo que não dá para desfazer"; prazo "apaga em N dias".
+  - Painel de uso (Marketing e Administrador): espaço real, custo, arquivos, lixeira, conferência, por mês e maiores eventos; "Alertas e preços" para o Administrador.
+  - Log (Administrador): filtros e CSV com BOM, ";" e proteção contra fórmula.
+  - A página "Em breve" saiu: todas as telas do menu existem.
+- **Demonstração:** 3 arquivos de exemplo na lixeira, uso calculado dos dados fictícios e um log fictício de 140 ações.
+- **Testes:**
+  - `npm test` **47/47**; `test:build` ok (de novo antes do push).
+  - Edge (CDP):
+    - lixeira: restaurar, e apagar de vez com confirmação;
+    - painel: configuração salva;
+    - log: filtro e CSV;
+    - Marketing sem os botões de configuração e fora da lixeira;
+    - 390 px sem rolagem nas 3 telas; console sem erro.
 
 ### 2026-11-25 — Lucas (com Claude) — FASE 4 (download, zip e links externos) — publicada (Lucas: "pode fazer o commit e push")
 - **Pedido do Lucas:** "segue pra fase 4".

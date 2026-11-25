@@ -11,11 +11,13 @@ import Evento from "./paginas/Evento";
 import EventoFormulario from "./paginas/EventoFormulario";
 import Arquivos from "./paginas/Arquivos";
 import Arquivo from "./paginas/Arquivo";
-import EmBreve from "./paginas/EmBreve";
 import Enviar from "./paginas/Enviar";
 import Downloads from "./paginas/Downloads";
 import Links from "./paginas/Links";
 import LinkExterno from "./paginas/LinkExterno";
+import Lixeira from "./paginas/Lixeira";
+import Log from "./paginas/Log";
+import Uso from "./paginas/Uso";
 
 // ── Contexto: quem está aqui e o aviso flutuante ──
 type Ctx = { eu: Eu; avisar: (msg: string) => void };
@@ -106,18 +108,9 @@ function Protegido() {
           <Route path="/downloads" element={<Downloads />} />
           <Route path="/enviar" element={<ComPermissao permissao="enviar"><Enviar /></ComPermissao>} />
           <Route path="/links" element={<ComPermissao permissao="compartilhar"><Links /></ComPermissao>} />
-          <Route path="/uso" element={<ComPermissao permissao="ver_uso"><EmBreve titulo="Painel de uso" fase={5} itens={[
-            "Espaço por evento e total, crescimento mensal e custo estimado do mês.",
-            "Alertas ao passar dos limites configurados (ex.: 1 TB, 2 TB).",
-            "Conferência diária com o espaço real ocupado no armazenamento.",
-          ]} /></ComPermissao>} />
-          <Route path="/lixeira" element={<ComPermissao permissao="lixeira"><EmBreve titulo="Lixeira" fase={5} itens={[
-            "Arquivos e eventos excluídos ficam 30 dias antes de serem apagados de vez.",
-            "Restaurar: só o Administrador.",
-          ]} /></ComPermissao>} />
-          <Route path="/log" element={<ComPermissao permissao="relatorios"><EmBreve titulo="Log de ações" fase={5} itens={[
-            "Quem enviou, baixou, compartilhou, excluiu e restaurou, e quando.",
-          ]} /></ComPermissao>} />
+          <Route path="/uso" element={<ComPermissao permissao="ver_uso"><Uso /></ComPermissao>} />
+          <Route path="/lixeira" element={<ComPermissao permissao="lixeira"><Lixeira /></ComPermissao>} />
+          <Route path="/log" element={<ComPermissao permissao="relatorios"><Log /></ComPermissao>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Layout>

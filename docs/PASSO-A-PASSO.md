@@ -218,6 +218,38 @@ O R2 apaga em até ~24 h depois do prazo; a tela "Meus downloads" já mostra o z
 4. Em **Links externos**: **Revogar**. A janela anônima, recarregada, diz "cancelado".
 5. O Claude confere os registros da Vercel. Lá ficam a velocidade do zip (MB/s) e qualquer erro.
 
+## Fase 5: lixeira, painel de uso e log (25/11/2026)
+
+Pronta e testada no modo demonstração. **A ordem é a mesma da Fase 4:** primeiro o SQL 03, depois a publicação.
+O SQL só acrescenta funções: o sistema no ar continua igual com ele.
+
+### 1. SQL 03 no banco do Portal (Leo revisa, Lucas roda, com backup)
+
+Arquivos: `importek-sistemas/banco/biblioteca/03-lixeira-e-uso.sql` e `03-desfazer.sql`.
+- **O que faz:** só acrescenta 6 funções. Nenhuma tabela, coluna, política ou permissão muda.
+  - **Apagar de vez:** só o Administrador e só o que está na lixeira. A rotina diária apaga só o que está lá
+    **há 30 dias ou mais**; o banco não aceita prazo menor.
+  - **Uso do dia e alertas:** cada limite avisa uma vez.
+  - **Crescimento por mês:** com o RLS de quem chama.
+- **Prova:** PGlite **311/311** em 25/11/2026 (269 do 01 e 02 + 42 do 03).
+- **Como rodar:** igual ao 02 (fotografia e checagem antes e depois). A **conferência tem 8 linhas, todas `ok = true`**.
+  Deu errado? `03-desfazer.sql` (conferência de 3 linhas).
+
+### 2. Publicar (o Claude faz o commit e o push quando o Lucas pedir)
+
+- **Na Vercel e no Portal, nada novo.** A rotina diária usa o cron que já existe (8h), que agora também apaga a
+  lixeira vencida e mede o uso.
+- **Primeira medição:** no dia seguinte às 8h, ou na hora pelo botão **"Medir agora"** no Painel de uso (Administrador).
+
+### 3. Testar no ar (Lucas, pelo card, como Administrador)
+
+1. **Lixeira:** mande uma foto de teste para a lixeira. Ela aparece em Lixeira com "Apaga de vez em 30 dias".
+   **Restaurar** → volta ao evento. Mande de novo → **Apagar de vez** → some da lixeira. No R2 (Cloudflare, bucket →
+   Objects), o original, a miniatura e a prévia dela saem.
+2. **Painel de uso:** **Medir agora**. O "Armazenamento real" deve bater com o tamanho do bucket no Cloudflare
+   (R2 → bucket → Metrics). Em **Alertas e preços**, confira os limites.
+3. **Log de ações:** filtre por "Arquivos (todas)" e baixe o CSV.
+
 ## Fase 6: produção e cópia de segurança
 
 1. **Cloudflare:** o bucket `importek-biblioteca` (já criado em 25/11/2026). **Antes de liberar: apagar os eventos e

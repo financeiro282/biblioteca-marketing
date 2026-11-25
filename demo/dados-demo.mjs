@@ -78,6 +78,11 @@ EVENTOS_BASE.forEach((base, i) => {
   }
 });
 
+// Lixeira de exemplo (Fase 5): 3 arquivos da Convenção, mandados há 3, 20 e 29 dias (o de 29 apaga amanhã).
+[[2, 3], [6, 20], [10, 29]].forEach(([i, dias]) => {
+  Object.assign(ARQUIVOS[i], { excluido_em: new Date(Date.now() - dias * 86_400_000).toISOString(), excluido_por_nome: 'Ana Marketing (exemplo)' });
+});
+
 // Favoritos de exemplo (por perfil, como se cada perfil fosse uma pessoa).
 export const FAVORITOS = {
   colaborador: [ARQUIVOS[0].id, ARQUIVOS[25].id],

@@ -25,6 +25,8 @@ Vale também o `CLAUDE.md` da pasta de cima (`Projetos de IA`): leia-o antes. Le
 - **Funções SEM sessão (SQL 02, Fase 4):** a rotina do zip (`zip_*`) e o link externo (`link_abrir`, `link_baixar`).
   Elas conferem TUDO por dentro (direito de cada arquivo, validade, senha). Regra nova de quem vê o quê → muda
   também nelas, e o teste PGlite (seções 10c e 10d) tem de passar.
+- **Apagar de vez (SQL 03, Fase 5):** SEMPRE o R2 primeiro (`apagarDoR2`) e só depois o banco, com os ids cujos
+  objetos todos saíram. A rotina diária só apaga o que está na lixeira há 30 dias ou mais (o banco confere).
 - **Regra que existe em dois lugares:** quem vê o quê está nas políticas do banco **e** em `compartilhado/visibilidade.js` (só para a demonstração e a tela). Mudou num, muda no outro.
 
 ## Arquivos (R2)

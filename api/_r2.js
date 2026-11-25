@@ -178,3 +178,32 @@ export async function enviarParteDoServidor(chave, uploadId, numero, corpo) {
 export async function apagarObjeto(chave) {
   try { await r2('DELETE', chave); } catch (e) { if (e?.statusR2 !== 404) throw e; }
 }
+
+// ── Fase 5: painel de uso e lixeira ─────────────────────────────────────────────────────────────────────
+
+/** Soma o bucket inteiro (ListObjectsV2, 1000 por vez): o espaço REAL, para conferir com o banco. */
+export async function somarBucket(maxVoltas = 500) {
+  let bytes = 0;
+  let objetos = 0;
+  let token = null;
+  for (let volta = 0; volta < maxVoltas; volta++) {
+    const consulta = { 'list-type': 2, 'max-keys': 1000, ...(token ? { 'continuation-token': token } : {}) };
+    const xml = await (await r2('GET', '', { consulta })).text();
+    for (const [, tam] of xml.matchAll(/<Size>(\d+)<\/Size>/g)) { bytes += Number(tam); objetos++; }
+    token = tag(xml, 'IsTruncated') === 'true' ? tag(xml, 'NextContinuationToken') : null;
+    if (!token) return { bytes, objetos };
+  }
+  throw new Error('Bucket grande demais para somar numa rotina.');
+}
+
+/** Apaga vários objetos (10 ao mesmo tempo). Devolve as chaves que NÃO saíram (vazio = todas saíram). */
+export async function apagarObjetos(chaves, simultaneos = 10) {
+  const falharam = [];
+  const fila = [...new Set(chaves.filter(Boolean))];
+  await Promise.all(Array.from({ length: simultaneos }, async () => {
+    for (let c = fila.shift(); c !== undefined; c = fila.shift()) {
+      try { await apagarObjeto(c); } catch { falharam.push(c); }
+    }
+  }));
+  return falharam;
+}

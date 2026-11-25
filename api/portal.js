@@ -3,7 +3,7 @@
 //   POST /biblioteca/api/portal-evento        → ?rota=evento        aviso assinado ("sair" = encerrar as sessões do e-mail)
 //   POST /biblioteca/api/sincronizar-portal   → ?rota=sincronizar   conferência de acessos (Portal: "Conferir acessos")
 //   GET  /api/portal (cron diário da Vercel, com Authorization: Bearer CRON_SECRET) → conferência de acessos e,
-//        desde a Fase 4, a retomada dos zips parados (api/_zipador.js)
+//        desde as Fases 4 e 5, a rotina diária (api/_rotina.js: zips, lixeira vencida, uso e alertas)
 //
 // ⚠️ Aviso: o corpo é lido CRU do fluxo e `req.body` nunca é tocado — a assinatura é do texto exato.
 // Conferência: o aviso só DISPARA; a lista vem sempre do Portal, buscada aqui com a senha do app. Este sistema não
@@ -11,7 +11,7 @@
 // na função sessoes_conferir_portal; o perfil novo vale na próxima entrada).
 
 import { assinaturaValida, chamadaDoCron, clienteDoBanco, parametros, perfilDe, portal, responder, responderErro } from './_comum.js';
-import { continuarZipsParados } from './_zipador.js';
+import { rotinaDiaria } from './_rotina.js';
 
 export { chamadaDoCron };
 
@@ -55,10 +55,14 @@ async function sincronizar(req, res) {
   if (!r.ok || !Array.isArray(lista.pessoas)) return responder(res, 502, { erro: 'O Portal não devolveu a lista de acessos; nada foi mudado.' });
   const { data, error } = await clienteDoBanco().rpc('sessoes_conferir_portal', { p_pessoas: listaParaOBanco(lista.pessoas) });
   if (error) throw error;
-  // No cron diário, também os zips parados (rotina que caiu) e os vencidos — Fase 4. Falha aqui não desfaz a conferência.
-  let zips = null;
-  if (chamadaDoCron(req)) zips = await continuarZipsParados().catch((e) => { console.error('[zip] cron:', e?.message || e); return null; });
-  return responder(res, 200, { ok: true, pessoas_com_acesso: lista.pessoas.length, sessoes_encerradas: data ?? 0, zips_retomados: zips });
+  // No cron diário, também a rotina (Fase 4 e 5): zips parados, lixeira vencida (30 dias) e uso do dia, com aviso aos
+  // Administradores (da lista do Portal) quando um limite é passado. Falha aqui não desfaz a conferência.
+  let rotina = null;
+  if (chamadaDoCron(req)) {
+    const admins = listaParaOBanco(lista.pessoas).filter((p) => p.perfil === 'admin').map((p) => p.email);
+    rotina = await rotinaDiaria({ admins }).catch((e) => { console.error('[rotina]', e?.message || e); return null; });
+  }
+  return responder(res, 200, { ok: true, pessoas_com_acesso: lista.pessoas.length, sessoes_encerradas: data ?? 0, rotina });
 }
 
 export default async function handler(req, res) {

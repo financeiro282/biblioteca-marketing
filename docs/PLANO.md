@@ -46,6 +46,17 @@ colaboradores consultam e baixam. Volume esperado acima de 1 TB, com muitos víd
 
 - **A medir no ar:** a velocidade do zip (o log da Vercel mostra MB/s por parte). Se 2 GB não couberem com folga em 5 min, diminuir a parte.
 
+## Fase 5: como ficou (25/11/2026, proposta do Claude para o Lucas confirmar)
+
+| Ponto | Como ficou |
+|---|---|
+| Lixeira | só o Administrador vê; restaurar (arquivo ou evento com os arquivos); **apagar de vez** com confirmação ("Entendo que não dá para desfazer") |
+| 30 dias | a rotina diária (8h) apaga de vez o que está na lixeira há 30 dias ou mais. O banco não aceita prazo menor |
+| Ordem ao apagar | **R2 primeiro, banco depois**: se o R2 falhar, o cadastro fica na lixeira e a próxima rotina tenta de novo (nunca sobra arquivo no R2 sem cadastro, cobrando) |
+| Painel de uso | Marketing e Administrador. Medição diária: a soma REAL do bucket (originais + miniaturas + prévias + zips) conferida com o cadastro; custo estimado com os preços da configuração (sem impostos e IOF); crescimento por mês; 15 maiores eventos |
+| Alertas | aos **Administradores** pelo Portal (sininho e notificação), uma vez por limite. Padrão: 1000 e 2000 GB; o Administrador muda em "Alertas e preços" |
+| Log | só o Administrador; filtros por ação, pessoa e período; CSV para o Excel (até 10.000 linhas). Visitante de link e rotina aparecem sem e-mail |
+
 ## Arquitetura
 
 ```
@@ -120,13 +131,13 @@ Navegador ──(1) pede links assinados────▶ api/ (Vercel, São Paulo
 | 2. Envio | arrastar e soltar, envio em partes direto ao R2, retomada, duplicados, miniaturas, HEIC, capa de vídeo, data de captura | **feita e no ar em 25/11** (falta o teste grande: 300 fotos + vídeo de GB com queda) |
 | 3. Organização | criar/editar eventos, tags, direito de uso, favoritos, "Aprovadas", lixeira (mandar) | **feita em 25/11** (eventos no ar; arquivos: demonstração) |
 | 4. Download e links | original, zip em segundo plano com aviso pelo Portal, links externos com validade/senha/revogação | **feita em 25/11 no modo demonstração**; no ar depois do SQL 02 e da regra `zips/` no Cloudflare (PASSO-A-PASSO, Fase 4) |
-| 5. Controle | lixeira (ver/restaurar/apagar de vez em 30 dias), painel de uso, alertas, log e relatórios | a fazer |
+| 5. Controle | lixeira (ver/restaurar/apagar de vez em 30 dias), painel de uso, alertas, log e relatórios | **feita em 25/11 no modo demonstração**; no ar depois do SQL 03 (PASSO-A-PASSO, Fase 5) |
 | 6. Produção | bucket definitivo + cópia no B2, endereço e CSP no Portal, roteiro completo, restauração, carga dos 78 GB, liberação | a fazer |
 
 ## Limites que pesam
 
 - **Vercel Hobby:**
-  - No máximo 12 funções por projeto. A biblioteca usa 8 (25/11) e deve chegar a cerca de 10.
+  - No máximo 12 funções por projeto. A biblioteca usa 9 (25/11). A Fase 6 (cópia) roda no GitHub Actions, fora da Vercel.
   - Tarefa agendada só uma vez por dia; função com no máximo 300 s; requisição de no máximo 4,5 MB. Por isso o arquivo vai direto do navegador ao R2.
   - Os termos da Vercel (seção 4) limitam o Hobby a uso não comercial. Isso vale para todos os sistemas da empresa; a decisão é do Leo.
 - **Riscos registrados:**

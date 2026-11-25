@@ -42,8 +42,9 @@ test('Marketing vê tudo, inclusive "Sem autorização"; contagens batem', () =>
   como('marketing');
   const [, r] = responderDemo('GET', '/eventos');
   assert.equal(r.eventos.length, EVENTOS.length);
-  assert.equal(r.eventos.reduce((s, e) => s + e.total_arquivos, 0), ARQUIVOS.length);
-  assert.equal(todosOsArquivos().length, ARQUIVOS.length);
+  const foraDaLixeira = ARQUIVOS.filter((a) => !a.excluido_em).length;   // 3 já vêm na lixeira (Fase 5)
+  assert.equal(r.eventos.reduce((s, e) => s + e.total_arquivos, 0), foraDaLixeira);
+  assert.equal(todosOsArquivos().length, foraDaLixeira);
   assert.ok(responderDemo('GET', '/arquivos?direito=sem_autorizacao')[1].total > 0);
 });
 
@@ -63,7 +64,7 @@ test('paginação de 60, ficha pelo id e sessão encerrada', () => {
   como('admin');
   const [, p1] = responderDemo('GET', '/arquivos');
   assert.equal(p1.arquivos.length, 60);
-  assert.equal(p1.total, ARQUIVOS.length);
+  assert.equal(p1.total, ARQUIVOS.filter((a) => !a.excluido_em).length);
   const [st, um] = responderDemo('GET', `/arquivos?id=${p1.arquivos[0].id}`);
   assert.equal(st, 200);
   assert.equal(um.arquivo.id, p1.arquivos[0].id);
@@ -282,4 +283,37 @@ test('Fase 4: link externo — só quem compartilha cria; só "liberado" entra; 
   assert.equal(responderDemo('POST', '/links', { acao: 'revogar', id: l.id })[0], 200);
   assert.equal(responderDemo('POST', '/externo', { acao: 'abrir', codigo })[1].situacao, 'revogado');
   assert.equal(responderDemo('GET', '/links')[1].links.find((x) => x.id === l.id).situacao, 'revogado');
+});
+
+// ── Fase 5: lixeira, uso e log ───────────────────────────────────────────────────────────────────────────
+test('Fase 5: lixeira só do Administrador (restaurar e apagar de vez só o que está nela); uso para Marketing; log com CSV', () => {
+  como('marketing');
+  assert.equal(responderDemo('GET', '/controle?rota=lixeira')[0], 403);
+  assert.equal(responderDemo('GET', '/controle?rota=log')[0], 403);
+  assert.equal(responderDemo('POST', '/controle', { acao: 'apagar', ids: [] })[0], 403);
+  let [s, r] = responderDemo('GET', '/controle?rota=uso');
+  assert.equal(s, 200);
+  assert.ok(r.hoje.bytes_r2 >= r.hoje.bytes_banco && r.custo.total > 0 && r.pode_configurar === false);
+  assert.equal(responderDemo('POST', '/controle', { acao: 'config', limites_alerta_gb: '1' })[0], 403, 'Marketing não configura');
+  como('colaborador');
+  assert.equal(responderDemo('GET', '/controle?rota=uso')[0], 403, 'Colaborador não vê o uso');
+  como('admin');
+  [s, r] = responderDemo('GET', '/controle?rota=lixeira');
+  assert.equal(s, 200);
+  assert.ok(r.arquivos.length >= 3, 'os 3 de exemplo (e o que outros testes mandaram)');
+const antes = r.arquivos.length;
+  const [a, b] = r.arquivos;
+  assert.ok(a.apaga_em && a.miniatura_url !== undefined);
+  assert.deepEqual(responderDemo('POST', '/controle', { acao: 'restaurar', ids: [a.id] })[1], { restaurados: 1 });
+  const fora = ARQUIVOS.find((x) => !x.excluido_em);
+  assert.deepEqual(responderDemo('POST', '/controle', { acao: 'apagar', ids: [b.id, fora.id] })[1], { apagados: 1, falharam: 0 }, 'o que não está na lixeira não sai');
+  assert.ok(ARQUIVOS.some((x) => x.id === fora.id) && !ARQUIVOS.some((x) => x.id === b.id));
+  assert.equal(responderDemo('GET', '/controle?rota=lixeira')[1].arquivos.length, antes - 2);
+  [s, r] = responderDemo('GET', '/controle?rota=log&acao=link.&pagina=1');
+  assert.ok(r.total > 0 && r.linhas.every((l) => l.acao.startsWith('link.')));
+  [s, r] = responderDemo('GET', '/controle?rota=log&csv=1');
+  assert.equal(s, 200);
+  assert.match(r.__arquivo.corpo, /^\uFEFFData e hora;/);
+  assert.equal(responderDemo('POST', '/controle', { acao: 'config', limites_alerta_gb: '500, 1000', preco_principal_gb: 0.015, gratis_principal_gb: 10, preco_copia_gb: 0.007, gratis_copia_gb: 10 })[0], 200);
+  assert.deepEqual(responderDemo('GET', '/controle?rota=uso')[1].config.limites_alerta_gb, [500, 1000]);
 });

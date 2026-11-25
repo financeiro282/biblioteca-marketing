@@ -29,6 +29,7 @@ Plano, custos e decisões: `docs/PLANO.md`. Configuração: `docs/PASSO-A-PASSO.
 | `api/envio.js` | envio (Fase 2): iniciar, assinar partes, concluir (confere o tamanho no R2), cancelar. O arquivo vai do navegador direto ao R2 |
 | `api/_r2.js` | links assinados do R2 (aws4fetch), o envio em partes e o download com o nome original; sem `R2_*` configurado, devolve vazio |
 | `api/zips.js` · `api/_zipador.js` · `api/_zip.js` | zip em segundo plano (Fase 4): pedir, "Meus downloads", a rotina que monta o zip (R2 → R2, partes de até 2 GB) e o aviso pelo Portal |
+| `api/controle.js` · `api/_rotina.js` | Fase 5: lixeira (restaurar; apagar de vez: R2 primeiro, banco depois), painel de uso (soma real do R2 + banco, custo), log (filtros e CSV), configuração; a rotina diária (zips, lixeira vencida, uso e alertas) |
 | `api/links.js` · `api/externo.js` · `api/_senha.js` | link externo (Fase 4): o Marketing cria e revoga; a página pública (`/biblioteca/l#código`, sem login) abre e baixa; senha pelo scrypt, conferida no banco |
 | `src/envio/` | a fila de envio no navegador: SHA-256 (duplicados), prévias e dados (EXIF, vídeo), partes, retomada |
 | `compartilhado/` | regras usadas pela tela, pela API e pela demonstração: perfis, direito, formatos, busca, visibilidade, download/zip/link |
@@ -38,7 +39,7 @@ Plano, custos e decisões: `docs/PLANO.md`. Configuração: `docs/PASSO-A-PASSO.
 
 - **O navegador nunca fala com o banco** nem com o R2 com chave.
 - **Sem sessão válida, o banco não devolve nenhuma linha**, nem para o servidor.
-- **Funções da Vercel:** 8 de 12 (teto do Hobby). Rota nova: juntar numa existente sempre que der.
+- **Funções da Vercel:** 9 de 12 (teto do Hobby). Rota nova: juntar numa existente sempre que der.
 
 ## Variáveis (Vercel, só no servidor; só os nomes)
 

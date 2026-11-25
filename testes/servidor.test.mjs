@@ -361,3 +361,32 @@ test('link externo (visitante): sem código no formato certo, 404 sem chegar ao 
     if (antes === undefined) delete process.env.PORTAL_URL; else process.env.PORTAL_URL = antes;
   }
 });
+
+// ── Fase 5: controle (lixeira, uso, log) ─────────────────────────────────────────────────────────────────
+test('controle: sem cookie, 401 em toda rota (nem chega ao banco ou ao R2); rota e ação desconhecidas', async () => {
+  const controle = (await import('../api/controle.js')).default;
+  const json = { 'content-type': 'application/json' };
+  for (const url of ['/api/controle?rota=lixeira', '/api/controle?rota=uso', '/api/controle?rota=log', '/api/controle?rota=log&csv=1']) {
+    const res = resposta();
+    await controle({ method: 'GET', url, headers: {} }, res);
+    assert.equal(res.codigo, 401, url);
+  }
+  for (const acao of ['restaurar', 'apagar', 'apagar_evento', 'medir_uso', 'config']) {
+    const res = resposta();
+    await controle({ method: 'POST', url: '/api/controle', headers: json, body: { acao, ids: [crypto.randomUUID()], id: crypto.randomUUID() } }, res);
+    assert.equal(res.codigo, 401, acao);
+  }
+  let res = resposta();
+  await controle({ method: 'GET', url: '/api/controle?rota=outra', headers: {} }, res);
+  assert.equal(res.codigo, 404);
+  res = resposta();
+  await controle({ method: 'POST', url: '/api/controle', headers: json, body: { acao: 'apagar_tudo' } }, res);
+  assert.equal(res.codigo, 400);
+});
+
+test('rotina: apaga do banco só os arquivos cujos objetos TODOS saíram do R2', async () => {
+  const { apagarDoR2 } = await import('../api/_rotina.js');
+  // Sem R2 configurado, nenhum objeto sai: nada pode sair do banco.
+  const ids = await apagarDoR2([{ id: 'a', chave_original: 'originais/2026/a.jpg', chave_miniatura: 'miniaturas/2026/a.jpg' }]);
+  assert.deepEqual(ids, []);
+});

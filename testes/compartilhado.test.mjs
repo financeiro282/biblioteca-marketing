@@ -241,3 +241,45 @@ test('link externo: título, validade de 1 a 90 dias, senha de 6 a 100, 1 a 1000
   assert.equal(dl.situacaoDoLink({ expira_em: '2026-11-20T00:00:00Z' }, agora), 'expirado');
   assert.equal(dl.situacaoDoLink({ expira_em: '2026-12-01T00:00:00Z', revogado_em: '2026-11-24T00:00:00Z' }, agora), 'revogado');
 });
+
+// ── Fase 5: lixeira, custo, configuração e log (compartilhado/controle.js) ───────────────────────────────
+import * as ct from '../compartilhado/controle.js';
+
+test('lixeira: apaga de vez 30 dias depois; dias que faltam', () => {
+  assert.equal(ct.apagaEm('2026-11-01T12:00:00Z'), '2026-12-01T12:00:00.000Z');
+  const agora = Date.parse('2026-11-25T12:00:00Z');
+  assert.equal(ct.diasParaApagar('2026-11-24T12:00:00Z', agora), 29);
+  assert.equal(ct.diasParaApagar('2026-10-01T12:00:00Z', agora), 0, 'vencido: 0 (sai na próxima rotina)');
+  assert.equal(ct.diasParaApagar('lixo', agora), null);
+});
+
+test('custo por mês: GB acima do grátis vezes o preço (armazenamento + cópia), sem negativo', () => {
+  const c = { preco_principal_gb: 0.015, gratis_principal_gb: 10, preco_copia_gb: 0.00695, gratis_copia_gb: 10 };
+  assert.deepEqual(ct.custoMensal(1000e9, c), { principal: 14.85, copia: 6.88, total: 21.73 }, 'mesmos números do PLANO (1 TB)');
+  assert.deepEqual(ct.custoMensal(5e9, c), { principal: 0, copia: 0, total: 0 });
+});
+
+test('configuração: limites inteiros em GB (até 10, sem repetir) e preços maiores ou iguais a zero', () => {
+  assert.deepEqual(ct.lerLimites('2000, 1000; 1000'), [1000, 2000]);
+  assert.equal(ct.lerLimites('mil'), null);
+  assert.equal(ct.lerLimites(Array.from({ length: 11 }, (_, i) => i + 1)), null);
+  assert.deepEqual(ct.lerLimites(''), []);
+  const ok = ct.lerConfig({ limites_alerta_gb: '500, 1000', preco_principal_gb: '0,015', gratis_principal_gb: 10, preco_copia_gb: 0.007, gratis_copia_gb: 10 });
+  assert.deepEqual(ok.valores, { limites_alerta_gb: [500, 1000], preco_principal_gb: 0.015, gratis_principal_gb: 10, preco_copia_gb: 0.007, gratis_copia_gb: 10 });
+  assert.deepEqual(Object.keys(ct.lerConfig({ limites_alerta_gb: 'x', preco_principal_gb: -1 }).erros).sort(),
+    ['gratis_copia_gb', 'gratis_principal_gb', 'limites_alerta_gb', 'preco_copia_gb', 'preco_principal_gb']);
+});
+
+test('log: filtros seguros e CSV para o Excel (BOM, ";", sem fórmula)', () => {
+  const f = ct.lerFiltrosDoLog(new URLSearchParams('acao=arquivo.&pessoa=ana,(x)&de=2026-11-01&ate=31/12&pagina=0'));
+  assert.deepEqual(f, { acao: 'arquivo.', pessoa: 'ana  x', de: '2026-11-01', ate: null, pagina: 1 });
+  assert.equal(ct.lerFiltrosDoLog({ acao: "x'; drop" }).acao, null);
+  const csv = ct.csvDoLog([{ em: '2026-11-25T15:00:00Z', nome: 'Ana; "A"', email: 'ana@x.invalid', perfil: 'marketing', acao: 'arquivo.baixar',
+    alvo_tipo: 'arquivo', alvo_id: '1', detalhes: { nome: '=SOMA(1)' }, ip: null }]);
+  assert.ok(csv.startsWith('\uFEFFData e hora;Pessoa;'));
+  assert.match(csv, /25\/11\/2026 12:00:00;"Ana; ""A""";ana@x\.invalid;marketing;Baixou original;arquivo\.baixar;arquivo;1;/);
+  assert.ok(!/;=SOMA/.test(csv) && /"\{""nome"":""=SOMA\(1\)""\}"/.test(csv), 'JSON entre aspas, nunca célula começando com =');
+  assert.match(ct.csvDoLog([{ em: '2026-11-25T15:00:00Z', acao: 'link.abrir', detalhes: null }]), /Visitante ou rotina/);
+  assert.equal(ct.rotuloDaAcao('arquivo.apagar_auto'), 'Arquivo apagado de vez (30 dias na lixeira)');
+  assert.equal(ct.rotuloDaAcao('outra'), 'outra');
+});
