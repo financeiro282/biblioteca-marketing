@@ -145,3 +145,22 @@ test('envio: um PUT até 32 MB; acima, partes de 16 MB iguais, nunca mais de 10.
   assert.equal(E.lerPartes([{ numero: 1, etag: 'a' }, { numero: 3, etag: 'c' }], 2), null, 'buraco nas partes');
   assert.equal(E.lerPartes([{ numero: 1, etag: 'a' }], 2), null, 'falta parte');
 });
+
+test('arquivo: edição (legenda, autor, tags, direito), lote só com o pedido, tags +/−, aprovar não vale para "Sem autorização"', async () => {
+  const A = await import('../compartilhado/arquivo.js');
+  assert.deepEqual(A.lerArquivoEditado({ legenda: ' Palco \r\n principal ', autor: ' ', tags: 'palco, PALCO, abertura', direito_uso: 'interno' }).valores,
+    { legenda: 'Palco\n principal', autor: null, tags: ['palco', 'abertura'], direito_uso: 'interno' });
+  assert.ok(A.lerArquivoEditado({ direito_uso: 'x' }).erros.direito_uso);
+  assert.ok(A.lerArquivoEditado({ legenda: 'a'.repeat(2001), direito_uso: 'liberado' }).erros.legenda);
+  const id = 'a0000000-0000-4000-8000-000000000001';
+  assert.equal(A.lerIds([]), null);
+  assert.equal(A.lerIds(['x']), null);
+  assert.deepEqual(A.lerIds([id, id.toUpperCase()]), [id], 'sem repetição');
+  assert.equal(A.lerIds(Array.from({ length: 501 }, () => id)), null, 'no máximo 500');
+  assert.equal(A.lerLote({ ids: [id], mudar: {} }).erro, 'Nada para mudar.');
+  assert.ok(A.lerLote({ ids: [id], mudar: { direito_uso: 'publico' } }).erro);
+  assert.deepEqual(A.lerLote({ ids: [id], mudar: { aprovada: true, tags_mais: 'a, b', autor: '  ' } }).mudar, { aprovada: true, tags_mais: ['a', 'b'], autor: null });
+  assert.deepEqual(A.tagsDepois(['Palco', 'equipe'], ['abertura', 'palco'], ['EQUIPE']), ['Palco', 'abertura']);
+  assert.equal(A.podeAprovar('sem_autorizacao'), false);
+  assert.ok(A.podeAprovar('interno') && A.podeAprovar('liberado'));
+});

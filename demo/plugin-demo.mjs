@@ -15,6 +15,7 @@ import { randomUUID } from 'node:crypto';
 import { bate, ehUuid, lerFiltros, normalizar, POR_PAGINA } from '../compartilhado/busca.js';
 import { direitoEfetivo } from '../compartilhado/direito.js';
 import { camposAlterados, lerEvento } from '../compartilhado/evento.js';
+import { lerArquivoEditado, lerIds, lerLote, podeAprovar, tagsDepois } from '../compartilhado/arquivo.js';
 import {
   anoDaChave, chaveMiniatura, chaveOriginal, chavePrevia, lerInicio, lerMetadados, lerPartes, PARTES_POR_PEDIDO, planoDeEnvio,
 } from '../compartilhado/envio.js';
@@ -63,7 +64,7 @@ function listarEventos(perfil, f) {
     .sort((a, b) => b.data_evento.localeCompare(a.data_evento) || a.nome.localeCompare(b.nome))
     .map((e) => {
       const dele = visiveis.filter((a) => a.evento_id === e.id);
-      const capa = dele.find((a) => a.tem_miniatura);
+      const capa = (e.capa_arquivo_id && dele.find((a) => a.id === e.capa_arquivo_id && a.tem_miniatura)) || dele.find((a) => a.tem_miniatura);
       return {
         id: e.id, nome: e.nome, data_evento: e.data_evento, local: e.local, descricao: e.descricao, tags: e.tags,
         responsavel: e.responsavel, direito_uso: e.direito_uso, capa_url: capa ? `${IMG}/${capa.id}.svg` : null,
@@ -97,6 +98,78 @@ function listarArquivos(perfil, f, id = null) {
 }
 
 const SEM_SESSAO = [401, { erro: 'Sessão encerrada (demonstração). Entre de novo pelo Portal simulado.', codigo: 'sem_sessao' }];
+
+// ── organização dos arquivos na demonstração ───────────────────────────────────────────────────────────
+const NAO_ENCONTRADO = [404, { erro: 'Arquivo não encontrado.', codigo: 'nao_encontrado' }];
+function arquivoDaPessoa(id) {
+  const a = D.ARQUIVOS.find((x) => x.id === String(id ?? '').toLowerCase());
+  const ev = a && POR_EVENTO.get(a.evento_id);
+  return a && arquivoVisivel(estado.perfil, a, ev) && paraConsulta(a, ev) ? a : null;
+}
+const SEM_APROVACAO = { aprovada: false };
+const ACOES_ARQUIVO = {
+  favoritar: { fazer: (c) => {
+    if (typeof c.favorito !== 'boolean' || !ehUuid(c.id)) return [400, { erro: 'Pedido inválido.' }];
+    const a = arquivoDaPessoa(c.id);
+    if (!a) return NAO_ENCONTRADO;
+    const lista = (D.FAVORITOS[estado.perfil] ||= []);
+    const i = lista.indexOf(a.id);
+    if (c.favorito && i < 0) lista.push(a.id);
+    if (!c.favorito && i >= 0) lista.splice(i, 1);
+    return [200, { favorito: c.favorito }];
+  } },
+  alterar: { permissao: 'organizar', fazer: (c) => {
+    const r = lerArquivoEditado(c.arquivo);
+    if (r.erros) return [400, { erro: 'Confira os campos marcados.', codigo: 'campos', erros: r.erros }];
+    const a = arquivoDaPessoa(c.id);
+    if (!a) return NAO_ENCONTRADO;
+    if (a.versao !== Number(c.versao)) return [409, { erro: 'Outra pessoa salvou este arquivo enquanto você editava. Recarregue a página e faça a mudança de novo.', codigo: 'versao' }];
+    if (!camposAlterados(a, r.valores).length) return [200, { arquivo: { id: a.id, versao: a.versao } }];
+    const ev = POR_EVENTO.get(a.evento_id);
+    Object.assign(a, r.valores, { versao: a.versao + 1 }, a.aprovada && !podeAprovar(direitoEfetivo(ev.direito_uso, r.valores.direito_uso)) ? SEM_APROVACAO : {});
+    return [200, { arquivo: { id: a.id, versao: a.versao } }];
+  } },
+  lote: { permissao: 'organizar', fazer: (c) => {
+    const r = lerLote(c);
+    if (r.erro) return [400, { erro: r.erro }];
+    let alterados = 0, semAutorizacao = 0, achados = 0;
+    for (const id of r.ids) {
+      const a = arquivoDaPessoa(id);
+      if (!a) continue;
+      achados++;
+      const ev = POR_EVENTO.get(a.evento_id);
+      const novo = {};
+      if (r.mudar.direito_uso !== undefined) novo.direito_uso = r.mudar.direito_uso;
+      if (r.mudar.autor !== undefined) novo.autor = r.mudar.autor;
+      if (r.mudar.tags_mais || r.mudar.tags_menos) novo.tags = tagsDepois(a.tags, r.mudar.tags_mais, r.mudar.tags_menos);
+      const aprova = podeAprovar(direitoEfetivo(ev.direito_uso, novo.direito_uso ?? a.direito_uso));
+      if (r.mudar.aprovada === true && !aprova) semAutorizacao++;
+      const aprovadaDepois = (r.mudar.aprovada ?? a.aprovada) && aprova;
+      if (aprovadaDepois !== a.aprovada) novo.aprovada = aprovadaDepois;
+      if (!camposAlterados(a, novo).length) continue;
+      Object.assign(a, novo, { versao: a.versao + 1 });
+      alterados++;
+    }
+    return [200, { alterados, conflitos: 0, sem_autorizacao: semAutorizacao, nao_encontrados: r.ids.length - achados }];
+  } },
+  capa: { permissao: 'organizar', fazer: (c) => {
+    const ev = POR_EVENTO.get(String(c.evento_id ?? '').toLowerCase());
+    if (!ev || ev.excluido_em || !eventoVisivel(estado.perfil, ev)) return [404, { erro: 'Evento não encontrado.', codigo: 'nao_encontrado' }];
+    if (c.arquivo_id === null) { ev.capa_arquivo_id = null; return [200, { ok: true }]; }
+    const a = arquivoDaPessoa(c.arquivo_id);
+    if (!a || a.evento_id !== ev.id) return NAO_ENCONTRADO;
+    if (!a.tem_miniatura) return [400, { erro: 'Este arquivo não tem miniatura para ser a capa.', codigo: 'sem_miniatura' }];
+    ev.capa_arquivo_id = a.id;
+    return [200, { ok: true }];
+  } },
+  lixeira: { permissao: 'excluir', fazer: (c) => {
+    const ids = lerIds(c.ids);
+    if (!ids) return [400, { erro: 'Escolha de 1 a 500 arquivos.' }];
+    let n = 0;
+    for (const id of ids) { const a = arquivoDaPessoa(id); if (a) { a.excluido_em = new Date().toISOString(); n++; } }
+    return [200, { na_lixeira: n }];
+  } },
+};
 
 // ── envio na demonstração ───────────────────────────────────────────────────────────────────────────────
 // Mesmas regras (compartilhado/envio.js). Os bytes enviados ao "R2" de mentira são só contados e descartados.
@@ -159,7 +232,7 @@ function concluirDemo(env, corpo) {
     largura: m.largura, altura: m.altura, duracao_seg: m.duracao_seg, capturado_em: m.capturado_em ?? `${ev.data_evento}T15:00:00.000Z`,
     camera: m.camera, autor: `${env.autor || 'Envio de teste'} (exemplo)`, legenda: 'Enviado na demonstração', tags: [],
     direito_uso: env.direito, aprovada: false, situacao: 'pronto', excluido_em: null,
-    tem_miniatura: corpo.miniatura === true && env.miniatura, sha256: env.sha,
+    tem_miniatura: corpo.miniatura === true && env.miniatura, sha256: env.sha, versao: 1,
   });
   env.pronto = true;
   return [200, { arquivo: { id: env.id } }];
@@ -212,6 +285,13 @@ const ROTAS = {
   // Fica só na memória do `npm run dev` (reiniciar volta aos eventos de exemplo).
   'POST /eventos': (_p, corpo) => {
     if (estado.saiu) return SEM_SESSAO;
+    if (corpo.acao === 'lixeira') {
+      if (!pode(estado.perfil, 'excluir')) return [403, { erro: 'Seu perfil não exclui.', codigo: 'sem_permissao' }];
+      const ev = POR_EVENTO.get(String(corpo.id ?? '').toLowerCase());
+      if (!ev || ev.excluido_em || !eventoVisivel(estado.perfil, ev)) return [404, { erro: 'Evento não encontrado.', codigo: 'nao_encontrado' }];
+      ev.excluido_em = new Date().toISOString();
+      return [200, { ok: true }];
+    }
     if (corpo.acao !== 'criar' && corpo.acao !== 'alterar') return [400, { erro: 'Ação desconhecida.' }];
     if (!pode(estado.perfil, 'organizar')) return [403, { erro: 'Seu perfil não altera eventos nem arquivos.', codigo: 'sem_permissao' }];
     const r = lerEvento(corpo.evento);
@@ -235,7 +315,7 @@ const ROTAS = {
     const id = p.get('id');
     if (id !== null) {
       const a = ehUuid(id) ? listarArquivos(estado.perfil, { pagina: 1 }, id.toLowerCase())[0] : null;
-      return a ? [200, { arquivo: arquivoParaTela(a, estado.perfil) }] : [404, { erro: 'Arquivo não encontrado.', codigo: 'nao_encontrado' }];
+      return a ? [200, { arquivo: { ...arquivoParaTela(a, estado.perfil), versao: a.versao } }] : [404, { erro: 'Arquivo não encontrado.', codigo: 'nao_encontrado' }];
     }
     const f = lerFiltros(p);
     const todos = listarArquivos(estado.perfil, f);
@@ -258,6 +338,14 @@ const ROTAS = {
     if (corpo.acao === 'cancelar') { env.partes.clear(); return [200, { ok: true }]; }
     if (corpo.acao === 'concluir') return concluirDemo(env, corpo);
     return [400, { erro: 'Ação desconhecida.' }];
+  },
+  // Organização dos arquivos (como api/arquivos.js): favoritos de cada perfil, editar, lote, capa e lixeira.
+  'POST /arquivos': (_p, corpo) => {
+    if (estado.saiu) return SEM_SESSAO;
+    const acao = ACOES_ARQUIVO[corpo.acao];
+    if (!acao) return [400, { erro: 'Ação desconhecida.' }];
+    if (acao.permissao && !pode(estado.perfil, acao.permissao)) return [403, { erro: 'Seu perfil não permite isto.', codigo: 'sem_permissao' }];
+    return acao.fazer(corpo);
   },
   'POST /__demo/perfil': (_p, corpo) => {
     if (!D.PERFIS.some((x) => x.codigo === corpo.perfil)) return [400, { erro: 'Perfil desconhecido.' }];

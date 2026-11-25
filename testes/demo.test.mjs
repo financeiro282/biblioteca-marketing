@@ -143,3 +143,55 @@ test('envio na demonstração: simples e em partes, duplicado avisado, Colaborad
   assert.equal(responderDemo('POST', '/envio', { acao: 'concluir', id: g.arquivo.id, partes })[0], 200);
   assert.equal(responderDemo('GET', `/arquivos?evento=${evento.id}&q=VID_9002`)[1].arquivos[0].tipo, 'video');
 });
+
+test('organização na demonstração: favoritos por perfil, editar com versão, lote, capa, lixeira de arquivo e de evento', () => {
+  const evento = EVENTOS.find((e) => e.nome === 'Convenção de Vendas 2026');
+  const doEvento = () => todosOsArquivos(`&evento=${evento.id}`);
+  const [a1, a2, a3] = doEvento().filter((a) => a.direito_efetivo === 'liberado' && a.miniatura_url);
+
+  // Favoritos: o Colaborador também; cada perfil, os seus.
+  como('colaborador');
+  assert.equal(responderDemo('POST', '/arquivos', { acao: 'favoritar', id: a1.id, favorito: true })[0], 200);
+  assert.ok(todosOsArquivos('&favoritos=1').some((a) => a.id === a1.id));
+  assert.equal(responderDemo('POST', '/arquivos', { acao: 'lote', ids: [a1.id], mudar: { aprovada: true } })[0], 403, 'Colaborador não organiza');
+  como('marketing');
+  assert.ok(!todosOsArquivos('&favoritos=1').some((a) => a.id === a1.id), 'favorito é de cada um');
+
+  // Editar com a versão; a versão velha não grava.
+  const [, f] = responderDemo('GET', `/arquivos?id=${a1.id}`);
+  const editado = { legenda: 'Abertura (exemplo)', autor: 'Fotógrafo C (exemplo)', tags: 'abertura, palco', direito_uso: 'interno' };
+  const [st, r] = responderDemo('POST', '/arquivos', { acao: 'alterar', id: a1.id, versao: f.arquivo.versao, arquivo: editado });
+  assert.equal(st, 200);
+  assert.equal(r.arquivo.versao, f.arquivo.versao + 1);
+  assert.equal(responderDemo('POST', '/arquivos', { acao: 'alterar', id: a1.id, versao: f.arquivo.versao, arquivo: editado })[0], 409);
+  const [, depois] = responderDemo('GET', `/arquivos?id=${a1.id}`);
+  assert.deepEqual([depois.arquivo.legenda, depois.arquivo.direito_efetivo, depois.arquivo.tags], ['Abertura (exemplo)', 'interno', ['abertura', 'palco']]);
+
+  // Lote: aprovar 2; "Sem autorização" não é aprovado (e perde a aprovação que tinha).
+  const [, l1] = responderDemo('POST', '/arquivos', { acao: 'lote', ids: [a2.id, a3.id], mudar: { aprovada: true, tags_mais: 'lote' } });
+  assert.equal(l1.alterados, 2);
+  const [, l2] = responderDemo('POST', '/arquivos', { acao: 'lote', ids: [a2.id], mudar: { direito_uso: 'sem_autorizacao', aprovada: true } });
+  assert.deepEqual([l2.alterados, l2.sem_autorizacao], [1, 1]);
+  const [, a2depois] = responderDemo('GET', `/arquivos?id=${a2.id}`);
+  assert.deepEqual([a2depois.arquivo.aprovada, a2depois.arquivo.direito_efetivo], [false, 'sem_autorizacao']);
+  assert.ok(responderDemo('GET', `/arquivos?id=${a3.id}`)[1].arquivo.tags.includes('lote'));
+
+  // Capa do evento.
+  assert.equal(responderDemo('POST', '/arquivos', { acao: 'capa', evento_id: evento.id, arquivo_id: a3.id })[0], 200);
+  assert.match(responderDemo('GET', `/eventos?id=${evento.id}`)[1].evento.capa_url, new RegExp(a3.id));
+
+  // Lixeira: some da lista e da contagem do evento.
+  const antes = responderDemo('GET', `/eventos?id=${evento.id}`)[1].evento.total_arquivos;
+  const [, lx] = responderDemo('POST', '/arquivos', { acao: 'lixeira', ids: [a3.id] });
+  assert.equal(lx.na_lixeira, 1);
+  assert.equal(responderDemo('GET', `/arquivos?id=${a3.id}`)[0], 404);
+  assert.equal(responderDemo('GET', `/eventos?id=${evento.id}`)[1].evento.total_arquivos, antes - 1);
+
+  // Evento para a lixeira (num evento criado para o teste, para não mexer nos de exemplo).
+  const [, novo] = responderDemo('POST', '/eventos', { acao: 'criar', evento: { nome: 'Para a lixeira (exemplo)', data_evento: '2026-11-01', direito_uso: 'interno' } });
+  como('colaborador');
+  assert.equal(responderDemo('POST', '/eventos', { acao: 'lixeira', id: novo.evento.id })[0], 403);
+  como('marketing');
+  assert.equal(responderDemo('POST', '/eventos', { acao: 'lixeira', id: novo.evento.id })[0], 200);
+  assert.equal(responderDemo('GET', `/eventos?id=${novo.evento.id}`)[0], 404);
+});

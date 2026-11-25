@@ -3,8 +3,9 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, ErroApi } from "../api";
 import { useApp } from "../App";
 import { Cabecalho } from "../componentes/Layout";
+import { ConfirmarLixeira } from "../componentes/EdicaoEmLote";
 import { AREA, Aviso, BOTAO, CAMPO, Campo, Carregando, cn } from "../componentes/ui";
-import { DIREITOS, LIMITES, direitoFicouMaisAberto, lerEvento, type Direito, type Evento } from "../lib/dominio";
+import { DIREITOS, LIMITES, direitoFicouMaisAberto, lerEvento, pode, resumoDoEvento, type Direito, type Evento } from "../lib/dominio";
 
 // Novo evento (/evento/novo) e Editar evento (/evento/:id/editar) — Marketing e Administrador.
 // Adiantado da Fase 3 em 25/11/2026 (o envio precisa de um evento). Os campos e os avisos seguem
@@ -35,6 +36,7 @@ export default function EventoFormulario({ modo }: { modo: "novo" | "editar" }) 
   const [erroGeral, setErroGeral] = useState<string | null>(null);
   const [erroCarga, setErroCarga] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const [lixeira, setLixeira] = useState(false);
 
   useEffect(() => {
     if (modo !== "editar") return;
@@ -156,6 +158,27 @@ export default function EventoFormulario({ modo }: { modo: "novo" | "editar" }) 
           <Link to={voltarPara} className={BOTAO.texto}>Cancelar</Link>
         </div>
       </form>
+
+      {/* Lixeira do evento (Marketing/Admin): separada do formulário, com confirmação. */}
+      {modo === "editar" && original && pode(eu.perfil, "excluir") && (
+        <section className="mt-10 max-w-2xl border-t border-borda pt-5">
+          <h2 className="text-sm font-semibold text-titulo">Mandar o evento para a lixeira</h2>
+          <p className="mt-1 text-sm text-secundario">O evento e todos os arquivos dele somem das listas e da busca. O Administrador pode restaurar em até 30 dias.</p>
+          <button type="button" className={cn(BOTAO.texto, "mt-2 text-erro-texto")} onClick={() => setLixeira(true)}>Mandar para a lixeira</button>
+        </section>
+      )}
+      {lixeira && original && (
+        <ConfirmarLixeira
+          titulo="Mandar o evento para a lixeira?"
+          texto={<p><span className="font-semibold text-titulo">{original.nome}</span> ({resumoDoEvento(original)}) some das listas e da busca na hora, com todos os arquivos.</p>}
+          onFechar={() => setLixeira(false)}
+          onConfirmar={async () => {
+            await api("eventos", "POST", { acao: "lixeira", id });
+            avisar("Evento na lixeira.");
+            navegar("/", { replace: true });
+          }}
+        />
+      )}
     </>
   );
 }

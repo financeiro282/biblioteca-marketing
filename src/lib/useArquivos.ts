@@ -32,5 +32,6 @@ export function useArquivos(filtros: Record<string, string | number | boolean | 
     arquivos, total, carregando, erro,
     temMais: !!arquivos && arquivos.length < total,
     carregarMais: () => buscar(pagina + 1),
+    recarregar: () => buscar(1), // depois de mudar arquivos (lote, lixeira): volta à 1ª página com os dados novos
   };
 }

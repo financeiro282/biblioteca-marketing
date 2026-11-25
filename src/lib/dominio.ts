@@ -62,7 +62,10 @@ export type Arquivo = {
   favorito: boolean;
   miniatura_url: string | null;
   previa_url: string | null;
+  versao?: number;              // só no arquivo pedido pelo id (para o "Editar")
 };
+
+export { LIMITES_ARQUIVO, LOTE_MAXIMO, lerArquivoEditado, podeAprovar } from "../../compartilhado/arquivo.js";
 
 export type PaginaDeArquivos = { arquivos: Arquivo[]; total: number; pagina: number; por_pagina: number };
 

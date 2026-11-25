@@ -72,7 +72,7 @@ EVENTOS_BASE.forEach((base, i) => {
       tags: k % 3 === 0 ? [um(['palco', 'equipe', 'produto', 'clientes'])] : [],
       direito_uso: direito,
       aprovada: direito === 'liberado' && ev.direito_uso === 'liberado' && k % 4 === 0,
-      situacao: 'pronto', excluido_em: null,
+      situacao: 'pronto', excluido_em: null, versao: 1,
       tem_miniatura: tipo !== 'raw',
     });
   }

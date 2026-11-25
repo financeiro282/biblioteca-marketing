@@ -73,6 +73,18 @@ async function alterar(req, corpo) {
   return { evento: { id, versao: data[0].versao } };
 }
 
+// Evento para a lixeira (Marketing/Admin): pela função do banco, que confere o perfil e grava o log. Os arquivos
+// dele somem junto das listas (o RLS de arquivos exige o evento visível); restaurar é do Administrador (Fase 5).
+async function paraLixeira(req, corpo) {
+  const { sb } = await exigirPermissao(req, 'excluir');
+  const id = String(corpo.id ?? '').toLowerCase();
+  if (!ehUuid(id)) throw erro(400, 'Pedido inválido.');
+  const { data, error } = await sb.rpc('evento_para_lixeira', { p_id: id });
+  if (error) throw error;
+  if (!data) throw erro(404, 'Evento não encontrado.', 'nao_encontrado');
+  return { ok: true };
+}
+
 export default async function handler(req, res) {
   try {
     if (req.method === 'POST') {
@@ -80,6 +92,7 @@ export default async function handler(req, res) {
       const corpo = await lerCorpo(req);
       if (corpo.acao === 'criar') return responder(res, 200, await criar(req, corpo));
       if (corpo.acao === 'alterar') return responder(res, 200, await alterar(req, corpo));
+      if (corpo.acao === 'lixeira') return responder(res, 200, await paraLixeira(req, corpo));
       throw erro(400, 'Ação desconhecida.');
     }
     if (req.method !== 'GET') return responder(res, 405, { erro: 'Método não aceito.' });

@@ -101,8 +101,8 @@ Navegador ──(1) pede links assinados────▶ api/ (Vercel, São Paulo
 | Fase | Entrega | Situação |
 |---|---|---|
 | 1. Base | entrada pelo Portal, 3 perfis, layout padrão, modo demonstração, SQL + RLS provados no Postgres local | **feita em 24/11** |
-| 2. Envio | arrastar e soltar, envio em partes direto ao R2, retomada, duplicados, miniaturas, HEIC, capa de vídeo, data de captura | a fazer |
-| 3. Organização | criar/editar eventos, tags, direito de uso, favoritos, "Aprovadas", lixeira (mandar) | a fazer |
+| 2. Envio | arrastar e soltar, envio em partes direto ao R2, retomada, duplicados, miniaturas, HEIC, capa de vídeo, data de captura | **feita e no ar em 25/11** (falta o teste grande: 300 fotos + vídeo de GB com queda) |
+| 3. Organização | criar/editar eventos, tags, direito de uso, favoritos, "Aprovadas", lixeira (mandar) | **feita em 25/11** (eventos no ar; arquivos: demonstração) |
 | 4. Download e links | original, zip em segundo plano com aviso pelo Portal, links externos com validade/senha/revogação | a fazer |
 | 5. Controle | lixeira (ver/restaurar/apagar de vez em 30 dias), painel de uso, alertas, log e relatórios | a fazer |
 | 6. Produção | bucket definitivo + cópia no B2, endereço e CSP no Portal, roteiro completo, restauração, carga dos 78 GB, liberação | a fazer |

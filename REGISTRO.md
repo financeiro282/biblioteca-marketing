@@ -5,11 +5,31 @@
 
 ## EM USO AGORA
 
-Lucas Cerda — desde 2026-11-25 11:37 — criar e editar evento; depois a Fase 2 (envio)
+Lucas Cerda — desde 2026-11-25 11:37 — Fases 2 e 3 (envio e organização); testar a Fase 3 no ar
 
 <!-- Formato: Nome — desde AAAA-MM-DD HH:MM — o que vai fazer -->
 
 ## Histórico
+
+### 2026-11-25 — Lucas (com Claude) — FASE 3 (organização dos arquivos) — publicada (Lucas: "pode fazer o commit e push")
+- **Pedido do Lucas:** "fase 3 agora, deu certo tudo" (os testes do envio de verdade deram certo).
+- **O que mudou (sem SQL novo; continua 5 de 12 funções):**
+  - `compartilhado/arquivo.js`: edição (legenda, autor, tags, direito), lote (até 500; só o que for pedido; tags
+    +/−), `podeAprovar` (nunca "Sem autorização").
+  - `api/arquivos.js` POST: `favoritar` (todos os perfis, cada um os seus), `alterar` (com `versao`), `lote`
+    (cada linha com a sua versão; as alteradas no meio voltam como conflito), `capa`, `lixeira` (função do banco
+    `arquivos_para_lixeira`). `api/eventos.js` POST `lixeira` (função `evento_para_lixeira`). Logs
+    `arquivo.alterar`, `arquivo.alterar_lote`, `evento.capa` (a lixeira grava o log no próprio banco).
+  - **Regra:** ficou "Sem autorização" (somando o evento)? A aprovação cai junto — no editar e no lote.
+  - Tela: ficha do arquivo com Favoritar, Editar (janela), Aprovar/Tirar aprovação, Usar como capa, Mandar para a
+    lixeira; página do evento com **Selecionar** (barra embaixo: Editar em lote, Lixeira, selecionar os da tela);
+    "Editar evento" com a seção "Mandar o evento para a lixeira" (com confirmação).
+  - Demonstração com as mesmas regras.
+- **Testes:** `npm test` 28/28; `test:build` ok. Fotos do Edge (CDP): favoritar, aprovar, editar (aviso de que a
+  aprovação cai), seleção (3), lote (+tags, aprovar: 1 recusado por "Sem autorização"), lixeira (30 → 28), seção da
+  lixeira do evento, Colaborador só com "Favoritar" e sem "Selecionar", 390 px sem rolagem, console sem erro.
+  - Corrigido no caminho: a etiqueta "Selecionar" saía preta sem texto (conflito de cores); "1 não foi aprovado: está".
+- **Restaurar da lixeira:** Fase 5 (Administrador).
 
 ### 2026-11-25 — Lucas (com Claude) — FASE 2 (envio) pronta no modo demonstração — NÃO publicada
 - **O que mudou:**
@@ -42,8 +62,12 @@ Lucas Cerda — desde 2026-11-25 11:37 — criar e editar evento; depois a Fase 
   `a973894994bed38bc82769a05155f14d`.
 - **CSP:** HEIC liberado pelo Lucas ("a, pode liberar"). Portal e Biblioteca com a conta R2 em img/media/connect e
   `worker-src 'self' blob:` (teste do Portal 42 ok).
-- **Falta:** publicar (Biblioteca e Portal) e o teste de verdade: 300 fotos + vídeo de vários GB com a conexão
-  derrubada no meio.
+- **Publicado (25/11, 12:30):** Biblioteca `cb0b111` e Portal `955c704` (CSP com o R2 conferido no ar; Portal,
+  Precificação, Consulta, Prospects e Fluxo abrindo).
+- **1º envio de verdade (Lucas, 25/11):** evento de teste criado pelo card e fotos enviadas: "deu certo". Logs: 15
+  `POST /envio`, nenhum erro.
+- **Falta:** o teste grande (300 fotos + vídeo de vários GB, com a conexão derrubada no meio) e os eventos/arquivos
+  de teste a apagar antes da liberação (estão no bucket definitivo).
 
 ### 2026-11-25 — Lucas (com Claude) — CRIAR E EDITAR EVENTO (adiantado da Fase 3)
 - **Decisões do Lucas (25/11, "pode sim"):** criar/editar evento antes do envio (o envio precisa de um evento);

@@ -169,3 +169,20 @@ test('envio: só POST com JSON, e sem cookie nem chega ao banco ou ao R2', async
   await envio({ method: 'POST', url: '/api/envio', headers: { 'content-type': 'application/json' }, body: { acao: 'iniciar' } }, res);
   assert.equal(res.codigo, 401);
 });
+
+test('organizar arquivos e lixeira do evento: só JSON, ação conhecida, e sem cookie nem chega ao banco', async () => {
+  let res = resposta();
+  await arquivos({ method: 'POST', url: '/api/arquivos', headers: { 'content-type': 'text/plain' }, body: 'x' }, res);
+  assert.equal(res.codigo, 415);
+  res = resposta();
+  await arquivos({ method: 'POST', url: '/api/arquivos', headers: { 'content-type': 'application/json' }, body: { acao: 'apagar_tudo' } }, res);
+  assert.equal(res.codigo, 400);
+  for (const corpo of [{ acao: 'favoritar', id: 'x', favorito: true }, { acao: 'lote', ids: [], mudar: {} }, { acao: 'lixeira', ids: [] }]) {
+    res = resposta();
+    await arquivos({ method: 'POST', url: '/api/arquivos', headers: { 'content-type': 'application/json' }, body: corpo }, res);
+    assert.equal(res.codigo, 401, corpo.acao);
+  }
+  res = resposta();
+  await eventos({ method: 'POST', url: '/api/eventos', headers: { 'content-type': 'application/json' }, body: { acao: 'lixeira', id: 'x' } }, res);
+  assert.equal(res.codigo, 401);
+});
