@@ -11,7 +11,7 @@
     { "source": "/api/sincronizar-portal", "destination": "/api/portal?rota=sincronizar" },
     { "source": "/biblioteca/api/:caminho*", "destination": "/api/:caminho*" },
     { "source": "/biblioteca/assets/:arquivo*", "destination": "/assets/:arquivo*" },
-    { "source": "/biblioteca/:arquivo(favicon.ico|favicon-32.png|apple-touch-icon.png|logo-importek-cor.png|robots.txt)", "destination": "/:arquivo" },
+    { "source": "/biblioteca/:arquivo(favicon.ico|favicon-32.png|apple-touch-icon.png|logo-importek-cor.png|logo-circulo.png|robots.txt)", "destination": "/:arquivo" },
     { "source": "/biblioteca", "destination": "/index.html" },
     { "source": "/biblioteca/", "destination": "/index.html" },
     { "source": "/biblioteca/:caminho*", "destination": "/index.html" }

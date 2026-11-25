@@ -22,9 +22,21 @@ livre
   `financeiro282` (os commits de 24/11 na Consulta também saíram assim), e a Vercel recusaria a publicação.
 - **Vercel:** variáveis prontas (`SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `BIBLIOTECA_DB_TOKEN`, `PORTAL_URL`,
   `PORTAL_SEGREDO`, `CRON_SECRET`). Faltam só as do R2 (Fase 2).
-- **A vez do Lucas:** criar o repositório vazio no GitHub (se ainda não criou), ligar o projeto da Vercel a ele
-  (Settings → Git), fazer o push e anotar o endereço que a Vercel der. Depois, o `vercel.json` do Portal
-  (`docs/PASSO-A-PASSO.md`, 4b.3).
+- **Commit `9f3983a`, push feito (25/11). Publicado e NO AR em https://biblioteca-marketing.vercel.app** (Vercel
+  ligada ao repositório; publica a cada push no `main`). Conferido no ar: `/` → `/biblioteca/`; páginas 200; API sem
+  sessão → 401 `sem_sessao`; `/api/portal` sem segredo → 401; nada da demonstração no JS; cabeçalhos de segurança;
+  funções em São Paulo (`gru1`).
+- **1ª entrada pelo card do Portal (25/11) deu "Algo deu errado no servidor".** Log da Vercel:
+  `Invalid schema: biblioteca`. Faltava pôr `biblioteca` em Supabase → Project Settings → Data API → **Exposed
+  schemas** (passo do LEIA-ME depois do SQL). O Lucas salvou, e a entrada seguinte funcionou (sessão criada,
+  eventos e arquivos consultados, sem erro; a lista vem vazia porque o banco ainda não tem eventos).
+  - Por enquanto o card entra direto por `biblioteca-marketing.vercel.app`, e não pelo endereço do Portal.
+- **Correção:** no ar, o `logo-circulo.png` do menu recolhido voltava como página (`text/html`), porque o
+  `vercel.json` lista um a um os arquivos de `public/` e ele ficou fora. Entrou na lista, e o teste novo em
+  `testes/servidor.test.mjs` confere que todo arquivo de `public/` está nela (18/18).
+- **Portal:** `vercel.json` com os desvios de `/biblioteca` e teste `testa-endereco-unico.mjs` 36 ok (ver o
+  REGISTRO do Portal). Falta o push. Depois, trocar o endereço de entrada do card para
+  `https://portal-importek.vercel.app/biblioteca/` (4b.6).
 
 ### 2026-11-25 — Lucas (com Claude) — menu lateral no padrão do Dash — pronto, NÃO publicado, sem git
 - **Pedido do Lucas:** viu as telas no modo demonstração ("seria isso mesmo") e pediu: "o layout, vamos seguir o

@@ -101,3 +101,14 @@ test('entrar exige JSON e um passe com formato válido (antes de falar com o Por
   await sessao({ method: 'DELETE', url: '/api/sessao', headers: {} }, res);
   assert.equal(res.codigo, 405);
 });
+
+// 25/11/2026: o logo-circulo.png (menu recolhido) ficou fora da lista do vercel.json e, no ar, voltava o index.html.
+test('todo arquivo de public/ é entregue pelo vercel.json (fora da lista, vira a página index.html no ar)', async () => {
+  const fs = await import('node:fs');
+  const raiz = new URL('../', import.meta.url);
+  const v = JSON.parse(fs.readFileSync(new URL('vercel.json', raiz), 'utf8'));
+  const regra = v.rewrites.find((r) => r.source.startsWith('/biblioteca/:arquivo('));
+  assert.ok(regra, 'regra dos arquivos de public/ no vercel.json');
+  const lista = regra.source.match(/\(([^)]+)\)/)[1].split('|');
+  for (const nome of fs.readdirSync(new URL('public/', raiz))) assert.ok(lista.includes(nome), `public/${nome} fora do vercel.json`);
+});
