@@ -11,8 +11,11 @@
 //
 // Rota nova numa fase nova → acrescentar em ROTAS (e os dados em dados-demo.mjs) e um caso em testes/demo.test.mjs.
 
+import { randomUUID } from 'node:crypto';
 import { bate, ehUuid, lerFiltros, normalizar, POR_PAGINA } from '../compartilhado/busca.js';
 import { direitoEfetivo } from '../compartilhado/direito.js';
+import { camposAlterados, lerEvento } from '../compartilhado/evento.js';
+import { pode } from '../compartilhado/perfis.js';
 import { arquivoVisivel, eventoVisivel, paraConsulta } from '../compartilhado/visibilidade.js';
 import * as D from './dados-demo.mjs';
 
@@ -107,9 +110,31 @@ const ROTAS = {
     if (id !== null) {
       // Como no servidor: o evento pedido pelo id só volta se o perfil puder vê-lo (sem filtros de busca).
       const ev = listarEventos(estado.perfil, { pagina: 1 }).find((e) => e.id === String(id).toLowerCase());
-      return ev ? [200, { evento: ev }] : [404, { erro: 'Evento não encontrado.', codigo: 'nao_encontrado' }];
+      return ev ? [200, { evento: { ...ev, versao: POR_EVENTO.get(ev.id).versao } }] : [404, { erro: 'Evento não encontrado.', codigo: 'nao_encontrado' }];
     }
     return [200, { eventos: listarEventos(estado.perfil, f) }];
+  },
+  // Criar e alterar evento (como api/eventos.js): a mesma conferência dos campos, da permissão e da versão.
+  // Fica só na memória do `npm run dev` (reiniciar volta aos eventos de exemplo).
+  'POST /eventos': (_p, corpo) => {
+    if (estado.saiu) return SEM_SESSAO;
+    if (corpo.acao !== 'criar' && corpo.acao !== 'alterar') return [400, { erro: 'Ação desconhecida.' }];
+    if (!pode(estado.perfil, 'organizar')) return [403, { erro: 'Seu perfil não altera eventos nem arquivos.', codigo: 'sem_permissao' }];
+    const r = lerEvento(corpo.evento);
+    if (r.erros) return [400, { erro: 'Confira os campos marcados.', codigo: 'campos', erros: r.erros }];
+    if (corpo.acao === 'criar') {
+      const ev = { id: randomUUID(), ...r.valores, capa_arquivo_id: null, excluido_em: null, versao: 1 };
+      D.EVENTOS.push(ev);
+      POR_EVENTO.set(ev.id, ev);
+      return [200, { evento: { id: ev.id } }];
+    }
+    const ev = POR_EVENTO.get(String(corpo.id ?? '').toLowerCase());
+    if (!ev || ev.excluido_em || !eventoVisivel(estado.perfil, ev)) return [404, { erro: 'Evento não encontrado.', codigo: 'nao_encontrado' }];
+    if (ev.versao !== Number(corpo.versao)) {
+      return [409, { erro: 'Outra pessoa salvou este evento enquanto você editava. Recarregue a página e faça a mudança de novo.', codigo: 'versao' }];
+    }
+    if (camposAlterados(ev, r.valores).length) Object.assign(ev, r.valores, { versao: ev.versao + 1 });
+    return [200, { evento: { id: ev.id, versao: ev.versao } }];
   },
   'GET /arquivos': (p) => {
     if (estado.saiu) return SEM_SESSAO;

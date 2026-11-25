@@ -112,3 +112,16 @@ test('todo arquivo de public/ é entregue pelo vercel.json (fora da lista, vira 
   const lista = regra.source.match(/\(([^)]+)\)/)[1].split('|');
   for (const nome of fs.readdirSync(new URL('public/', raiz))) assert.ok(lista.includes(nome), `public/${nome} fora do vercel.json`);
 });
+
+test('criar/alterar evento: só JSON, e sem cookie nem chega ao banco (401)', async () => {
+  let res = resposta();
+  await eventos({ method: 'POST', url: '/api/eventos', headers: { 'content-type': 'text/plain' }, body: 'x' }, res);
+  assert.equal(res.codigo, 415);
+  res = resposta();
+  await eventos({ method: 'POST', url: '/api/eventos', headers: { 'content-type': 'application/json' }, body: { acao: 'criar', evento: {} } }, res);
+  assert.equal(res.codigo, 401);
+  assert.equal(res.corpo.codigo, 'sem_sessao');
+  res = resposta();
+  await eventos({ method: 'DELETE', url: '/api/eventos', headers: {} }, res);
+  assert.equal(res.codigo, 405);
+});

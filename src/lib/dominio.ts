@@ -33,7 +33,10 @@ export type Evento = {
   fotos: number;
   videos: number;
   raws: number;
+  versao?: number;              // só no evento pedido pelo id (para o "Editar evento")
 };
+
+export { LIMITES, direitoFicouMaisAberto, lerEvento, lerTags } from "../../compartilhado/evento.js";
 
 export type Arquivo = {
   id: string;

@@ -8,6 +8,7 @@ import { pode, type Eu, type Permissao } from "./lib/dominio";
 import EntrarPortal from "./paginas/EntrarPortal";
 import Eventos from "./paginas/Eventos";
 import Evento from "./paginas/Evento";
+import EventoFormulario from "./paginas/EventoFormulario";
 import Arquivos from "./paginas/Arquivos";
 import Arquivo from "./paginas/Arquivo";
 import EmBreve from "./paginas/EmBreve";
@@ -91,10 +92,8 @@ function Protegido() {
       <Layout>
         <Routes>
           <Route path="/" element={<Eventos />} />
-          <Route path="/evento/novo" element={<ComPermissao permissao="organizar"><EmBreve titulo="Novo evento" fase={3} itens={[
-            "Nome, data, local, descrição, tags, responsável e capa.",
-            "Direito de uso do evento (Uso liberado, Somente uso interno ou Sem autorização), escolhido sempre.",
-          ]} /></ComPermissao>} />
+          <Route path="/evento/novo" element={<ComPermissao permissao="organizar"><EventoFormulario modo="novo" /></ComPermissao>} />
+          <Route path="/evento/:id/editar" element={<ComPermissao permissao="organizar"><EventoFormulario modo="editar" /></ComPermissao>} />
           <Route path="/evento/:id" element={<Evento />} />
           <Route path="/arquivos" element={<Arquivos modo="busca" />} />
           <Route path="/favoritos" element={<Arquivos modo="favoritos" />} />

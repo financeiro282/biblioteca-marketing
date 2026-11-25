@@ -72,3 +72,30 @@ test('paginação de 60, ficha pelo id e sessão encerrada', () => {
   assert.equal(responderDemo('GET', '/arquivos')[1].codigo, 'sem_sessao');
   assert.equal(responderDemo('GET', '/rota-que-nao-existe')[0], 501);
 });
+
+test('criar e editar evento: Marketing cria e altera; Colaborador não; versão antiga não grava (409)', () => {
+  como('colaborador');
+  const campos = { nome: 'Evento de teste (exemplo)', data_evento: '2026-11-25', local: 'São Paulo/SP', tags: 'teste, exemplo', direito_uso: 'sem_autorizacao' };
+  assert.equal(responderDemo('POST', '/eventos', { acao: 'criar', evento: campos })[0], 403);
+  como('marketing');
+  const [st0, r0] = responderDemo('POST', '/eventos', { acao: 'criar', evento: { ...campos, direito_uso: undefined } });
+  assert.equal(st0, 400);
+  assert.ok(r0.erros.direito_uso);
+  const [st, r] = responderDemo('POST', '/eventos', { acao: 'criar', evento: campos });
+  assert.equal(st, 200);
+  const [, lido] = responderDemo('GET', `/eventos?id=${r.evento.id}`);
+  assert.equal(lido.evento.nome, campos.nome);
+  assert.deepEqual(lido.evento.tags, ['teste', 'exemplo']);
+  assert.equal(lido.evento.versao, 1);
+  assert.equal(lido.evento.total_arquivos, 0);
+  // Colaborador não vê o evento "Sem autorização" recém-criado.
+  como('colaborador');
+  assert.equal(responderDemo('GET', `/eventos?id=${r.evento.id}`)[0], 404);
+  como('marketing');
+  const [st2, r2] = responderDemo('POST', '/eventos', { acao: 'alterar', id: r.evento.id, versao: 1, evento: { ...campos, direito_uso: 'interno' } });
+  assert.equal(st2, 200);
+  assert.equal(r2.evento.versao, 2);
+  assert.equal(responderDemo('POST', '/eventos', { acao: 'alterar', id: r.evento.id, versao: 1, evento: campos })[0], 409);
+  como('colaborador');
+  assert.equal(responderDemo('GET', `/eventos?id=${r.evento.id}`)[0], 200, 'agora "Somente uso interno": o Colaborador vê');
+});

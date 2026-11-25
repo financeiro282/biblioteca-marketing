@@ -42,7 +42,7 @@ export default function Evento() {
         acoes={
           <>
             {pode(eu.perfil, "enviar") && <Link to={`/enviar?evento=${evento.id}`} className={BOTAO.principal}>Enviar arquivos</Link>}
-            {pode(eu.perfil, "organizar") && <button type="button" className={BOTAO.contorno} onClick={() => avisar(emBreve(3))}>Editar evento</button>}
+            {pode(eu.perfil, "organizar") && <Link to={`/evento/${evento.id}/editar`} className={BOTAO.contorno}>Editar evento</Link>}
             <button type="button" className={BOTAO.contorno} onClick={() => avisar(emBreve(4))}>Baixar todos (zip)</button>
           </>
         }

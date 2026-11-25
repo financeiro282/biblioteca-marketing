@@ -85,3 +85,26 @@ test('visibilidade: a MESMA regra do banco (cenário do teste PGlite: Colaborado
   assert.equal(eventoVisivel('marketing', { ...ev.lib, excluido_em: '2026-11-24' }), false, 'marketing não vê lixeira');
   assert.ok(eventoVisivel('admin', { ...ev.lib, excluido_em: '2026-11-24' }), 'admin vê lixeira');
 });
+
+test('evento: campos obrigatórios, direito escolhido sempre, limites do banco e tags sem repetição', async () => {
+  const { camposAlterados, dataValida, direitoFicouMaisAberto, lerEvento, lerTags } = await import('../compartilhado/evento.js');
+  const vazio = lerEvento({});
+  assert.deepEqual(Object.keys(vazio.erros).sort(), ['data_evento', 'direito_uso', 'nome']);
+  // Sem direito escolhido não grava (nenhum padrão libera um evento por descuido).
+  assert.ok(lerEvento({ nome: 'Feira', data_evento: '2026-05-19' }).erros.direito_uso);
+  assert.ok(lerEvento({ nome: 'Feira', data_evento: '2026-05-19', direito_uso: 'publico' }).erros.direito_uso);
+  const ok = lerEvento({ nome: '  Feira   Hospitalar ', data_evento: '2026-05-19', local: ' ', descricao: ' Linha 1 \r\nLinha 2 ',
+    tags: 'feira, Estande ,estande, ESTÂNDE,, joelho', responsavel: '', direito_uso: 'interno' });
+  assert.deepEqual(ok.valores, { nome: 'Feira Hospitalar', data_evento: '2026-05-19', local: null, descricao: 'Linha 1\nLinha 2',
+    tags: ['feira', 'Estande', 'joelho'], responsavel: null, direito_uso: 'interno' });
+  assert.ok(lerEvento({ nome: 'x'.repeat(201), data_evento: '2026-05-19', direito_uso: 'liberado' }).erros.nome);
+  assert.ok(lerEvento({ nome: 'x', data_evento: '2026-05-19', direito_uso: 'liberado', tags: ['y'.repeat(41)] }).erros.tags);
+  assert.ok(lerEvento({ nome: 'x', data_evento: '2026-05-19', direito_uso: 'liberado', tags: Array.from({ length: 51 }, (_, i) => `t${i}`) }).erros.tags);
+  for (const d of ['2026-02-30', '19/05/2026', '1989-12-31', '2101-01-01', '']) assert.equal(dataValida(d), null, d);
+  assert.equal(dataValida('2024-02-29'), '2024-02-29');
+  assert.deepEqual(lerTags(['a', ' A ', 'b']), ['a', 'b']);
+  assert.ok(direitoFicouMaisAberto('sem_autorizacao', 'interno'));
+  assert.ok(direitoFicouMaisAberto('interno', 'liberado'));
+  assert.equal(direitoFicouMaisAberto('liberado', 'interno'), false);
+  assert.deepEqual(camposAlterados({ nome: 'a', tags: ['x'], local: null }, { nome: 'a', tags: ['x', 'y'], local: null }), ['tags']);
+});

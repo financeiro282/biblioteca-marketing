@@ -42,7 +42,7 @@ const FORMATOS_SORTEIO = [['foto', 'jpg'], ['foto', 'jpg'], ['foto', 'jpg'], ['f
   ['video', 'mp4'], ['video', 'mov'], ['raw', 'cr3']];
 
 export const EVENTOS = EVENTOS_BASE.map(({ n: _n, ...e }, i) => ({
-  id: uuid('e0000000', i + 1), ...e, capa_arquivo_id: null, excluido_em: null,
+  id: uuid('e0000000', i + 1), ...e, capa_arquivo_id: null, excluido_em: null, versao: 1,
 }));
 
 export const ARQUIVOS = [];

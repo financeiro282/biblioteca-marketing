@@ -12,6 +12,23 @@ colaboradores consultam e baixam. Volume esperado acima de 1 TB, com muitos víd
 | 3 | Onde roda a cópia diária | **GitHub Actions** (rclone, nuvem para nuvem) |
 | 4 | Acervo atual | No Drive, **78 GB**. A carga será pelo próprio sistema (uma pasta por evento), na Fase 6 |
 | 5 | Leo | **Confirma** que revisa o SQL e faz as mudanças no Portal |
+| 6 | Ordem (25/11) | **Criar e editar evento primeiro** (era da Fase 3): o envio precisa de um evento. Capa, lixeira e o resto da organização seguem na Fase 3 |
+| 7 | Bibliotecas novas (25/11) | **Aprovadas:** `aws4fetch`, `@noble/hashes`, `exifr` e `heic-to` (justificativa abaixo, em "Bibliotecas") |
+| 8 | Menu (25/11) | **O do Dash:** barra recolhida com ícones no computador |
+
+## Bibliotecas novas (aprovadas pelo Lucas em 25/11/2026)
+
+| Biblioteca | Onde | Para quê | Por que não à mão |
+|---|---|---|---|
+| `aws4fetch` (MIT, 64 KB) | servidor | assinar os links do R2 (envio em partes, miniaturas, download) | é a dos exemplos da Cloudflare; o SDK da AWS faz o mesmo com um tamanho muitas vezes maior |
+| `@noble/hashes` (MIT) | navegador | SHA-256 de arquivo grande em pedaços (duplicados) | o navegador só calcula com o arquivo inteiro na memória (vídeo de 4 GB travaria). É JavaScript puro: não precisa mudar o CSP |
+| `exifr` (MIT) | navegador | data de captura, câmera, orientação (JPG, HEIC, RAW) | ler EXIF à mão é muito código e frágil |
+| `heic-to` (LGPL-3.0) | navegador, só quando aparece HEIC | HEIC → JPG (prévia) | Chrome e Edge no Windows não abrem HEIC. Uso interno, sem modificar a biblioteca |
+
+- As do navegador carregam só na tela de envio (o Colaborador nunca baixa).
+- ⚠️ O `heic-to` usa WebAssembly, e o CSP do Portal (`script-src 'self'`) não permite. Se o teste confirmar, o
+  Lucas decide: (a) liberar só o WebAssembly (`'wasm-unsafe-eval'`) no CSP do Portal, com o Leo; ou (b) HEIC
+  sem prévia, como o RAW.
 
 ## Arquitetura
 

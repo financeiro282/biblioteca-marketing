@@ -5,11 +5,30 @@
 
 ## EM USO AGORA
 
-livre
+Lucas Cerda — desde 2026-11-25 11:37 — criar e editar evento; depois a Fase 2 (envio)
 
 <!-- Formato: Nome — desde AAAA-MM-DD HH:MM — o que vai fazer -->
 
 ## Histórico
+
+### 2026-11-25 — Lucas (com Claude) — CRIAR E EDITAR EVENTO (adiantado da Fase 3)
+- **Decisões do Lucas (25/11, "pode sim"):** criar/editar evento antes do envio (o envio precisa de um evento);
+  bibliotecas da Fase 2 aprovadas (`aws4fetch`, `@noble/hashes`, `exifr`, `heic-to`; justificativa no `docs/PLANO.md`).
+- **O que mudou:**
+  - `compartilhado/evento.js`: a regra dos campos (a mesma na tela, na API e na demonstração), com os limites do
+    banco. Direito de uso **sem padrão** (escolhido sempre); tags sem repetição (ignora acento e maiúscula).
+  - `api/eventos.js`: `POST { acao: 'criar' | 'alterar' }` (continua 4 de 12 funções). Permissão `organizar` aqui e
+    no banco (políticas `eventos_incluir`/`eventos_alterar`). Alterar confere a `versao`: se outra pessoa salvou
+    antes, nada é gravado (409). Log `evento.criar` / `evento.alterar` (só os nomes dos campos; na troca de direito,
+    o antes e o depois). `GET ?id=` passou a trazer a `versao`.
+  - `src/paginas/EventoFormulario.tsx` (`/evento/novo` e `/evento/:id/editar`). Aviso antes de salvar quando o
+    direito fica mais aberto (ex.: "Sem autorização" → o Colaborador passa a ver).
+  - Demonstração: `POST /eventos` (fica na memória do `npm run dev`).
+- **SQL:** nenhum (a estrutura de 24/11 já permitia).
+- **Testes:** `npm test` 21/21 (regra dos campos, API sem cookie/sem JSON, demonstração criando e alterando, 409);
+  `test:build` ok. Fotos do Edge (CDP): avisos nos campos, criar → abre o evento, editar com aviso de direito,
+  Colaborador sem acesso ao formulário, 390 px e 1366 px sem rolagem lateral, console sem erro.
+- **Não testado ainda:** gravar no banco de verdade (só pelo card, depois da publicação).
 
 ### 2026-11-25 — Lucas (com Claude) — GIT: primeiro commit (repositório `financeiro282/biblioteca-marketing`)
 - **Decisão do Lucas:** publicar como os outros sistemas: repositório próprio no GitHub (`financeiro282`), com a

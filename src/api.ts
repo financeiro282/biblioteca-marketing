@@ -6,7 +6,8 @@ export const PORTAL_URL = (import.meta.env.VITE_PORTAL_URL || "https://portal-im
 export const SLUG = "biblioteca";
 
 export class ErroApi extends Error {
-  constructor(mensagem: string, public status: number, public codigo?: string) { super(mensagem); }
+  // `erros`: campo → frase curta (formulários; ex.: { nome: "Informe o nome do evento." }).
+  constructor(mensagem: string, public status: number, public codigo?: string, public erros?: Record<string, string>) { super(mensagem); }
 }
 
 // Ida ao Portal com freio: voltou de lá há menos de 1 min e ainda sem sessão (cookie bloqueado, por exemplo) →
@@ -49,7 +50,7 @@ export async function api<T>(caminho: string, metodo: "GET" | "POST" = "GET", co
   const j = await r.json().catch(() => ({}));
   if (!r.ok) {
     if (r.status === 401 && j.codigo === "sem_sessao") irAoPortal();
-    throw new ErroApi(j.erro || "Não foi possível falar com o servidor.", r.status, j.codigo);
+    throw new ErroApi(j.erro || "Não foi possível falar com o servidor.", r.status, j.codigo, j.erros);
   }
   return j as T;
 }
