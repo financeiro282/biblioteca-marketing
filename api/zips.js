@@ -20,21 +20,32 @@ import { chamarRotinasDepois, retomarSePreciso, trabalhar } from './_zipador.js'
 
 const naoEncontrado = () => erro(404, 'Zip não encontrado.', 'nao_encontrado');
 const COLUNAS = 'id, titulo, situacao, partes, total_bytes, arquivo_ids, erro, criado_em, pronto_em, expira_em';
-const ARQ = 'id, evento_id, nome_original, tamanho_bytes, capturado_em, eventos!inner(nome, excluido_em)';
+const ARQ = 'id, evento_id, nome_original, tamanho_bytes, capturado_em';
 
-// Lê arquivos pelo RLS de quem pede, em páginas (o banco entrega no máximo 1000 por vez).
+// Lê arquivos pelo RLS de quem pede, em páginas (o banco entrega no máximo 1000 por vez). O evento vem numa consulta
+// à parte: arquivos e eventos têm DUAS ligações (arquivo → evento e a capa do evento → arquivo), e o "embed" do
+// Supabase recusa ligação ambígua (erro de 25/11/2026 no ar). Evento na lixeira: os arquivos dele ficam de fora.
 async function lerArquivos(sb, filtrar) {
   const todos = [];
   for (let de = 0; de < 10_000; de += 1000) {
     const { data, error } = await filtrar(sb.from('arquivos').select(ARQ))
-      .eq('situacao', 'pronto').is('excluido_em', null).is('eventos.excluido_em', null)
+      .eq('situacao', 'pronto').is('excluido_em', null)
       .order('capturado_em', { ascending: true, nullsFirst: false }).order('nome_original').order('id')
       .range(de, de + 999);
     if (error) throw error;
     todos.push(...(data ?? []));
     if ((data ?? []).length < 1000) break;
   }
-  return todos;
+  const idsEventos = [...new Set(todos.map((a) => a.evento_id))];
+  const eventos = new Map();
+  for (let i = 0; i < idsEventos.length; i += 150) {
+    const { data, error } = await sb.from('eventos').select('id, nome, excluido_em').in('id', idsEventos.slice(i, i + 150));
+    if (error) throw error;
+    for (const e of data ?? []) eventos.set(e.id, e);
+  }
+  return todos
+    .filter((a) => eventos.has(a.evento_id) && !eventos.get(a.evento_id).excluido_em)
+    .map((a) => ({ ...a, evento_nome: eventos.get(a.evento_id).nome }));
 }
 
 async function lerPorIds(sb, ids) {
@@ -69,7 +80,7 @@ async function pedir(req, corpo) {
     titulo = ev.nome;
   } else {
     arquivos = await lerPorIds(sb, pedido.ids);
-    const eventos = new Set(arquivos.map((a) => a.eventos?.nome));
+    const eventos = new Set(arquivos.map((a) => a.evento_nome));
     const qtd = `${arquivos.length} ${arquivos.length === 1 ? 'arquivo' : 'arquivos'}`;
     titulo = eventos.size === 1 ? `${[...eventos][0]} (${qtd})` : `Seleção de ${qtd}`;
   }

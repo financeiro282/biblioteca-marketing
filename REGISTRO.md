@@ -49,6 +49,7 @@ Lucas Cerda — desde 2026-11-25 11:37 — Fase 4 (download, zip e links externo
     - Colaborador só com "Baixar (zip)" e fora de /links;
     - 390 px sem rolagem; console sem erro.
   - Corrigido no caminho: dois botões principais na janela "Link criado"; faltava a etiqueta "Vídeo" na página pública.
+- **No ar (25/11):** o 1º pedido de zip deu 500: "more than one relationship was found for arquivos and eventos" (a capa do evento é a 2ª ligação). Corrigido: o evento vem numa consulta à parte (`api/zips.js`). A demonstração não pega esse tipo de erro: só o banco de verdade.
 - **Fica para depois:** zip pela página do link externo (se o Marketing pedir); apagar os zips de link vencido (Fase 5).
 
 ### 2026-11-25 — Lucas (com Claude) — FASE 3 (organização dos arquivos) — publicada (Lucas: "pode fazer o commit e push")
